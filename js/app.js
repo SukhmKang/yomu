@@ -1,5 +1,18 @@
 // app.js — Main application orchestration
 
+// Config fallback — used when config.js isn't deployed (keys entered via Settings instead)
+if (!window.Config) {
+  window.Config = {
+    get(key) {
+      return localStorage.getItem(`yomu_cfg_${key}`) ?? window.YOMU_CONFIG?.[key] ?? null;
+    },
+    set(key, value) {
+      if (value) localStorage.setItem(`yomu_cfg_${key}`, value);
+      else localStorage.removeItem(`yomu_cfg_${key}`);
+    },
+  };
+}
+
 const App = (() => {
 
   // ---- State ----
