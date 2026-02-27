@@ -403,6 +403,8 @@ const App = (() => {
     Dict.preload();  // start loading dict in background
     WaniKani.init();
     Anki.init().then(updateQueueBadge);
+
+    Camera.open();  // open camera immediately on launch
     updateQueueBadge();
 
     if ('serviceWorker' in navigator) {
