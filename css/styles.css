@@ -1,0 +1,734 @@
+/* ========== CSS Variables ========== */
+:root {
+  --bg: #0f0f0f;
+  --bg-2: #1a1a1a;
+  --bg-3: #252525;
+  --bg-4: #2e2e2e;
+  --border: #333;
+  --text: #f0f0f0;
+  --text-2: #a0a0a0;
+  --text-3: #666;
+  --accent: #ffd54f;
+  --accent-dim: rgba(255, 213, 79, 0.15);
+
+  /* WaniKani level colors */
+  --wk-apprentice: #f26522;
+  --wk-guru: #882d9e;
+  --wk-master: #294ddb;
+  --wk-enlightened: #0093dd;
+  --wk-burned: #545454;
+  --wk-locked: #888;
+  --wk-not-wk: #d9534f;
+
+  --sheet-radius: 20px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* ========== Reset & Base ========== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+  touch-action: manipulation;
+}
+
+input {
+  font-family: inherit;
+  color: var(--text);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ========== Header ========== */
+#app-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  height: calc(52px + var(--safe-top));
+  padding-top: var(--safe-top);
+  padding-left: calc(16px + var(--safe-left));
+  padding-right: calc(16px + var(--safe-right));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+#app-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+#header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ========== Icon Buttons ========== */
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--text-2);
+  transition: background 0.15s, color 0.15s;
+  position: relative;
+}
+
+.icon-btn:active {
+  background: var(--bg-3);
+  color: var(--text);
+}
+
+.queue-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  background: var(--accent);
+  color: #000;
+  font-size: 9px;
+  font-weight: 700;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* ========== Main ========== */
+#app-main {
+  position: fixed;
+  top: calc(52px + var(--safe-top));
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* ========== Empty State ========== */
+#empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 32px;
+  text-align: center;
+  gap: 12px;
+}
+
+#empty-icon {
+  font-size: 64px;
+  margin-bottom: 8px;
+}
+
+#empty-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+#empty-subtitle {
+  font-size: 15px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+/* ========== Photo View ========== */
+#photo-view {
+  width: 100%;
+  min-height: 100%;
+  padding-bottom: calc(100px + var(--safe-bottom));
+}
+
+#photo-container {
+  position: relative;
+  width: 100%;
+  line-height: 0;
+}
+
+#photo-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  pointer-events: none;
+}
+
+/* ========== Tap Overlay ========== */
+#tap-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.tap-target {
+  position: absolute;
+  cursor: pointer;
+  pointer-events: all;
+  touch-action: manipulation;
+  background: rgba(255, 213, 79, 0.1);
+  border: 1px solid rgba(255, 213, 79, 0.3);
+  border-radius: 2px;
+  transition: background 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tap-target:active,
+.tap-target.active {
+  background: rgba(255, 213, 79, 0.4);
+  border-color: rgba(255, 213, 79, 0.8);
+}
+
+/* ========== Processing Overlay ========== */
+#processing-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 50;
+  color: var(--text);
+  font-size: 15px;
+}
+
+/* ========== Spinner ========== */
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--bg-4);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ========== Camera FAB ========== */
+.fab {
+  position: fixed;
+  bottom: calc(24px + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(255, 213, 79, 0.4);
+  touch-action: manipulation;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.fab:active {
+  transform: translateX(-50%) scale(0.93);
+  box-shadow: 0 2px 10px rgba(255, 213, 79, 0.3);
+}
+
+#camera-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+
+/* ========== Bottom Sheet Backdrop ========== */
+#sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+#sheet-backdrop.visible {
+  opacity: 1;
+}
+
+/* ========== Bottom Sheet ========== */
+#bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 210;
+  background: var(--bg-2);
+  border-radius: var(--sheet-radius) var(--sheet-radius) 0 0;
+  padding-bottom: calc(20px + var(--safe-bottom));
+  max-height: 85vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+
+#bottom-sheet.open {
+  transform: translateY(0);
+}
+
+#sheet-handle-area {
+  padding: 12px 0 8px;
+  display: flex;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: none;
+}
+
+#sheet-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--bg-4);
+  border-radius: 2px;
+}
+
+/* ========== Sheet Loading ========== */
+#sheet-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 32px 24px;
+  color: var(--text-2);
+  font-size: 15px;
+}
+
+/* ========== Sheet Content ========== */
+#sheet-content {
+  padding: 0 20px 8px;
+}
+
+#sheet-word-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+#sheet-word {
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text);
+  letter-spacing: 0.05em;
+}
+
+#sheet-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  padding-top: 6px;
+  flex-shrink: 0;
+}
+
+#sheet-reading {
+  font-size: 20px;
+  color: var(--text-2);
+  margin-bottom: 12px;
+  font-weight: 400;
+}
+
+#sheet-meaning {
+  font-size: 17px;
+  color: var(--text);
+  line-height: 1.45;
+  margin-bottom: 6px;
+}
+
+#sheet-pos {
+  font-size: 13px;
+  color: var(--text-3);
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ========== Badges ========== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge-apprentice  { background: var(--wk-apprentice); color: #fff; }
+.badge-guru        { background: var(--wk-guru); color: #fff; }
+.badge-master      { background: var(--wk-master); color: #fff; }
+.badge-enlightened { background: var(--wk-enlightened); color: #fff; }
+.badge-burned      { background: var(--wk-burned); color: #fff; }
+.badge-locked      { background: transparent; border: 1.5px solid var(--wk-locked); color: var(--wk-locked); }
+.badge-not-wk      { background: var(--wk-not-wk); color: #fff; }
+
+.badge-anki-yes    { background: #2e7d32; color: #fff; }
+.badge-anki-no     { background: transparent; border: 1.5px solid var(--text-3); color: var(--text-3); }
+.badge-anki-queued { background: #e65100; color: #fff; }
+
+/* ========== Section Labels ========== */
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-bottom: 8px;
+}
+
+/* ========== Candidate Picker ========== */
+#sheet-candidates {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+#candidates-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.candidate-chip {
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: var(--bg-3);
+  border: 1.5px solid var(--border);
+  color: var(--text-2);
+  font-size: 14px;
+  touch-action: manipulation;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.candidate-chip.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ========== Extra Senses ========== */
+#sheet-extra-senses {
+  margin-bottom: 14px;
+}
+
+.extra-sense {
+  font-size: 14px;
+  color: var(--text-3);
+  padding: 3px 0;
+  line-height: 1.4;
+}
+
+/* ========== Component Kanji ========== */
+#sheet-components {
+  margin-bottom: 16px;
+}
+
+#components-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kanji-chip {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 64px;
+}
+
+.kanji-chip-char {
+  font-size: 24px;
+  line-height: 1;
+  color: var(--text);
+}
+
+.kanji-chip-reading {
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.kanji-chip-meaning {
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+/* ========== Example Sentence ========== */
+#sheet-example {
+  margin-bottom: 20px;
+}
+
+#example-sentence {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+
+/* ========== Anki Row ========== */
+#sheet-anki-row {
+  padding-top: 4px;
+}
+
+.anki-status {
+  font-size: 14px;
+  color: #66bb6a;
+}
+
+/* ========== Action Buttons ========== */
+.action-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #000;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  touch-action: manipulation;
+  transition: opacity 0.1s;
+}
+
+.action-btn:active {
+  opacity: 0.8;
+}
+
+.action-btn--secondary {
+  background: var(--bg-3);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+/* ========== Sheet Error ========== */
+#sheet-error {
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  text-align: center;
+}
+
+#sheet-error-msg {
+  font-size: 15px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+/* ========== Settings Panel ========== */
+#settings-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: var(--bg);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: var(--safe-top);
+  padding-bottom: calc(24px + var(--safe-bottom));
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+#settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+#settings-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+#settings-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-section label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.settings-section input {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 15px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.settings-section input:focus {
+  border-color: var(--accent);
+}
+
+.settings-section input::placeholder {
+  color: var(--text-3);
+}
+
+.settings-status {
+  font-size: 14px;
+  color: #66bb6a;
+  text-align: center;
+  min-height: 20px;
+}
+
+/* ========== Toast ========== */
+#toast {
+  position: fixed;
+  bottom: calc(100px + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  z-index: 400;
+  background: var(--bg-3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  opacity: 1;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+#toast.hiding {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
+}
+
+/* ========== Live Camera Preview ========== */
+#camera-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+}
+
+#camera-video {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#camera-ui {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding-bottom: calc(32px + var(--safe-bottom));
+  padding-top: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background: linear-gradient(transparent, rgba(0,0,0,0.6));
+}
+
+#shutter-btn {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid rgba(255,255,255,0.4);
+  box-shadow: 0 0 0 3px #fff;
+  touch-action: manipulation;
+  transition: transform 0.1s, opacity 0.1s;
+}
+
+#shutter-btn:active {
+  transform: scale(0.9);
+  opacity: 0.8;
+}
+
+.camera-ui-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.4);
+  color: #fff;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  border: 1.5px solid rgba(255,255,255,0.3);
+}

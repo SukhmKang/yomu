@@ -1,0 +1,11 @@
+# API keys — never commit these
+.env
+js/config.js
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp

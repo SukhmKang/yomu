@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Japanese reader with instant kanji lookup">
+
+  <!-- PWA meta tags -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="読む">
+  <meta name="theme-color" content="#0f0f0f">
+
+  <title>読む — Yomu</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header id="app-header">
+    <div id="app-title">読む</div>
+    <div id="header-actions">
+      <button id="anki-queue-btn" class="icon-btn hidden" title="Queued cards pending sync">
+        <span class="queue-icon">📚</span>
+        <span id="queue-count" class="queue-badge">0</span>
+      </button>
+      <button id="settings-btn" class="icon-btn" title="Settings">⚙</button>
+    </div>
+  </header>
+
+  <!-- Main content area -->
+  <main id="app-main">
+
+    <!-- Initial / empty state -->
+    <div id="empty-state">
+      <div id="empty-icon">📖</div>
+      <p id="empty-title">Photograph a page</p>
+      <p id="empty-subtitle">Tap the camera button to capture Japanese text</p>
+    </div>
+
+    <!-- Photo view (hidden until photo captured) -->
+    <div id="photo-view" class="hidden">
+      <div id="photo-container">
+        <img id="photo-img" alt="Captured page">
+        <div id="tap-overlay"></div>
+        <div id="processing-overlay" class="hidden">
+          <div class="spinner"></div>
+          <p>Detecting text…</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Camera FAB -->
+  <button id="camera-btn" class="fab" title="Capture page">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </svg>
+  </button>
+
+  <!-- Hidden file input fallback (used if getUserMedia is denied) -->
+  <input type="file" id="camera-input" accept="image/*" capture="environment" aria-hidden="true">
+
+  <!-- Live camera preview -->
+  <div id="camera-preview" class="hidden">
+    <video id="camera-video" autoplay playsinline muted></video>
+    <div id="camera-ui">
+      <button id="camera-cancel-btn" class="camera-ui-btn">✕</button>
+      <button id="shutter-btn" aria-label="Capture"></button>
+      <button id="camera-flip-btn" class="camera-ui-btn">⇄</button>
+    </div>
+  </div>
+
+  <!-- Bottom sheet backdrop -->
+  <div id="sheet-backdrop" class="hidden"></div>
+
+  <!-- Lookup bottom sheet -->
+  <div id="bottom-sheet" class="hidden">
+    <div id="sheet-handle-area">
+      <div id="sheet-handle"></div>
+    </div>
+
+    <!-- Loading state -->
+    <div id="sheet-loading" class="hidden">
+      <div class="spinner"></div>
+      <p>Looking up…</p>
+    </div>
+
+    <!-- Result state -->
+    <div id="sheet-content" class="hidden">
+
+      <!-- Candidate picker (shown when multiple Jisho matches) -->
+      <div id="sheet-candidates" class="hidden">
+        <div class="section-label">Multiple matches</div>
+        <div id="candidates-list"></div>
+      </div>
+
+      <div id="sheet-word-row">
+        <div id="sheet-word"></div>
+        <div id="sheet-badges">
+          <span id="wk-badge" class="badge"></span>
+          <span id="anki-badge" class="badge"></span>
+        </div>
+      </div>
+
+      <div id="sheet-reading"></div>
+      <div id="sheet-meaning"></div>
+      <div id="sheet-pos" class="sheet-meta"></div>
+
+      <!-- Extra senses -->
+      <div id="sheet-extra-senses" class="hidden"></div>
+
+      <!-- Component kanji breakdown (multi-kanji words) -->
+      <div id="sheet-components" class="hidden">
+        <div class="section-label">Components</div>
+        <div id="components-list"></div>
+      </div>
+
+      <!-- Example sentence -->
+      <div id="sheet-example" class="hidden">
+        <div class="section-label">Example</div>
+        <div id="example-sentence"></div>
+      </div>
+
+      <!-- Anki action -->
+      <div id="sheet-anki-row">
+        <button id="add-anki-btn" class="action-btn hidden">Add to Anki</button>
+        <button id="queue-anki-btn" class="action-btn action-btn--secondary hidden">Queue for Anki</button>
+        <span id="already-in-anki" class="anki-status hidden">✓ Already in deck</span>
+      </div>
+    </div>
+
+    <!-- Error state -->
+    <div id="sheet-error" class="hidden">
+      <p id="sheet-error-msg"></p>
+      <button id="sheet-retry-btn" class="action-btn">Retry</button>
+    </div>
+  </div>
+
+  <!-- Settings panel -->
+  <div id="settings-panel" class="hidden">
+    <div id="settings-header">
+      <h2>Settings</h2>
+      <button id="settings-close-btn" class="icon-btn">✕</button>
+    </div>
+    <div id="settings-body">
+      <div class="settings-section">
+        <label>Google Vision API Key</label>
+        <input type="password" id="cfg-vision-key" placeholder="AIza…" autocomplete="off">
+      </div>
+      <div class="settings-section">
+        <label>Anthropic API Key</label>
+        <input type="password" id="cfg-claude-key" placeholder="sk-ant-…" autocomplete="off">
+      </div>
+      <div class="settings-section">
+        <label>WaniKani API Token</label>
+        <input type="password" id="cfg-wk-token" placeholder="your token" autocomplete="off">
+      </div>
+      <div class="settings-section">
+        <label>WaniKani Level</label>
+        <input type="number" id="cfg-wk-level" placeholder="24" min="1" max="60">
+      </div>
+      <button id="settings-save-btn" class="action-btn">Save Settings</button>
+      <p id="settings-status" class="settings-status"></p>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="hidden"></div>
+
+  <!-- Scripts (config must load first) -->
+  <script src="js/config.js" onerror="console.warn('No config.js found — open Settings to configure API keys.')"></script>
+  <script src="js/anki.js"></script>
+  <script src="js/wanikani.js"></script>
+  <script src="js/dict.js"></script>
+  <script src="js/claude.js"></script>
+  <script src="js/vision.js"></script>
+  <script src="js/camera.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
