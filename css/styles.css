@@ -153,6 +153,8 @@ input {
   padding: 32px;
   text-align: center;
   gap: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 #empty-icon {
@@ -431,6 +433,14 @@ input {
   margin-bottom: 8px;
 }
 
+/* ========== Inflection row ========== */
+#sheet-inflection {
+  font-size: 13px;
+  color: var(--text-3);
+  padding: 0 20px 8px;
+  letter-spacing: 0.02em;
+}
+
 /* ========== Candidate Picker ========== */
 #sheet-candidates {
   margin-bottom: 14px;
@@ -671,6 +681,56 @@ input {
 #toast.hiding {
   opacity: 0;
   transform: translateX(-50%) translateY(10px);
+}
+
+/* ========== Enhance Button ========== */
+.enhance-btn {
+  position: sticky;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: block;
+  margin: 8px auto 0;
+  padding: 6px 16px;
+  border-radius: 20px;
+  background: rgba(15,15,15,0.75);
+  border: 1.5px solid var(--border);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  touch-action: manipulation;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.enhance-btn[data-active="true"] {
+  background: rgba(255, 213, 79, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.enhance-btn:disabled {
+  opacity: 0.5;
+}
+
+/* ========== Merged tap target groups ========== */
+/* Each group gets a distinct color; cycling through 6 hues */
+.tap-target--merged {
+  border-width: 2px;
+}
+
+.group-color-0 { background: rgba(100,180,255,0.15); border-color: rgba(100,180,255,0.6); }
+.group-color-1 { background: rgba(100,255,160,0.15); border-color: rgba(100,255,160,0.6); }
+.group-color-2 { background: rgba(255,140,100,0.15); border-color: rgba(255,140,100,0.6); }
+.group-color-3 { background: rgba(200,130,255,0.15); border-color: rgba(200,130,255,0.6); }
+.group-color-4 { background: rgba(255,220,80,0.15);  border-color: rgba(255,220,80,0.6);  }
+.group-color-5 { background: rgba(80,230,230,0.15);  border-color: rgba(80,230,230,0.6);  }
+
+.tap-target--merged.active {
+  background: rgba(100,180,255,0.4);
 }
 
 /* ========== Live Camera Preview ========== */

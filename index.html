@@ -37,13 +37,14 @@
 
     <!-- Initial / empty state -->
     <div id="empty-state">
-      <div id="empty-icon">📖</div>
-      <p id="empty-title">Photograph a page</p>
-      <p id="empty-subtitle">Tap the camera button to capture Japanese text</p>
+      <div id="empty-icon">📷</div>
+      <p id="empty-title">Tap to open camera</p>
+      <p id="empty-subtitle">Point at a page of Japanese text</p>
     </div>
 
     <!-- Photo view (hidden until photo captured) -->
     <div id="photo-view" class="hidden">
+      <button id="enhance-btn" class="enhance-btn hidden">✦ Enhance</button>
       <div id="photo-container">
         <img id="photo-img" alt="Captured page">
         <div id="tap-overlay"></div>
@@ -100,6 +101,8 @@
         <div class="section-label">Multiple matches</div>
         <div id="candidates-list"></div>
       </div>
+
+      <div id="sheet-inflection" class="hidden"></div>
 
       <div id="sheet-word-row">
         <div id="sheet-word"></div>
@@ -178,6 +181,8 @@
   <script src="js/config.js" onerror="console.warn('No config.js found — open Settings to configure API keys.')"></script>
   <script src="js/anki.js"></script>
   <script src="js/wanikani.js"></script>
+  <script src="js/kuromoji.js"></script>
+  <script src="js/morphology.js"></script>
   <script src="js/dict.js"></script>
   <script src="js/claude.js"></script>
   <script src="js/vision.js"></script>

@@ -1,6 +1,6 @@
 // sw.js — Service worker (basic caching for offline shell)
 
-const CACHE_NAME = 'yomu-v1';
+const CACHE_NAME = 'yomu-v2';
 const SHELL_FILES = [
   './',
   './index.html',
@@ -13,7 +13,7 @@ const SHELL_FILES = [
   './js/wanikani.js',
   './js/anki.js',
   './js/dict.js',
-  // dict/index.json is NOT precached (69MB) — cached on first access instead
+  // dict/index.json and dict/kuromoji/*.dat.gz are NOT precached — cached on first access
 ];
 
 // Install: cache app shell

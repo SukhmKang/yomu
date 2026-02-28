@@ -21,7 +21,12 @@ const App = (() => {
   let currentWord        = null;
   let currentContext     = null;
   let currentResult      = null;  // the selected Jisho candidate
-  let currentCandidates  = [];    // all Jisho candidates for this tap
+  let currentCandidates  = [];    // all dict candidates for this tap
+  let currentOriginal    = null;  // inflected form from OCR (e.g. 食べている)
+  let currentDictionary  = null;  // dictionary form looked up (e.g. 食べる)
+  let currentLayout      = null;  // detected page layout
+  let currentMergeMap    = null;  // Map<idx, {groupId, combinedText}> from Enhance
+  let enhanceMode        = false;
   let sheetOpen          = false;
   let sheetTouchStartY   = 0;
   let toastTimer         = null;
@@ -71,6 +76,9 @@ const App = (() => {
       el('tap-overlay').innerHTML = '';
 
       currentAnnotations = await Vision.detectText(currentPhotoData.base64);
+      currentLayout      = Vision.detectLayout(currentAnnotations);
+      currentMergeMap    = null;
+      enhanceMode        = false;
 
       Vision.renderTapTargets(
         currentAnnotations,
@@ -81,6 +89,9 @@ const App = (() => {
       );
 
       el('processing-overlay').classList.add('hidden');
+      el('enhance-btn').classList.remove('hidden');
+      el('enhance-btn').textContent  = '✦ Enhance';
+      el('enhance-btn').dataset.active = 'false';
 
     } catch (err) {
       el('processing-overlay').classList.add('hidden');
@@ -98,11 +109,14 @@ const App = (() => {
     openSheetLoading();
 
     try {
-      const candidates = await Dict.search(word);
+      const { original, dictionary } = await Morphology.getDictionaryForm(word);
+      currentOriginal   = original;
+      currentDictionary = dictionary;
+
+      const candidates = await Dict.search(dictionary);
 
       if (candidates.length === 0) {
-        // Nothing in Jisho — show a minimal sheet with just the raw text
-        renderSheetResult({ word, reading: '', primaryMeaning: '', primaryPos: '', isCommon: false }, [], false);
+        renderSheetResult({ word: dictionary, reading: '', primaryMeaning: '', primaryPos: '', isCommon: false }, [], false);
         return;
       }
 
@@ -162,6 +176,15 @@ const App = (() => {
     el('sheet-loading').classList.add('hidden');
     el('sheet-error').classList.add('hidden');
     el('sheet-content').classList.remove('hidden');
+
+    // Show inflected → dictionary form when they differ
+    const inflectionEl = el('sheet-inflection');
+    if (currentOriginal && currentDictionary && currentOriginal !== currentDictionary) {
+      inflectionEl.textContent = `${currentOriginal} → ${currentDictionary}`;
+      inflectionEl.classList.remove('hidden');
+    } else {
+      inflectionEl.classList.add('hidden');
+    }
 
     // Word + reading
     el('sheet-word').textContent    = candidate.word || candidate.reading;
@@ -359,6 +382,78 @@ const App = (() => {
     updateQueueBadge();
   }
 
+  // ---- Enhance (OCR segmentation fix) ----
+  async function onEnhance() {
+    if (!currentAnnotations.length) return;
+    const btn = el('enhance-btn');
+
+    // Toggle off if already enhanced
+    if (enhanceMode) {
+      enhanceMode     = false;
+      currentMergeMap = null;
+      btn.textContent        = '✦ Enhance';
+      btn.dataset.active     = 'false';
+      Vision.renderTapTargets(
+        currentAnnotations, el('tap-overlay'),
+        currentPhotoData.naturalWidth, currentPhotoData.naturalHeight,
+        onWordTapped
+      );
+      return;
+    }
+
+    btn.textContent  = 'Enhancing…';
+    btn.disabled     = true;
+
+    try {
+      const result = await Claude.fixSegmentation(currentAnnotations, currentLayout);
+
+      // Build mergeMap from mergedGroups
+      currentMergeMap = new Map();
+      (result.mergedGroups ?? []).forEach((group, groupId) => {
+        const combinedText = group.map(i => {
+          const corrected = result.correctedText?.[String(i)];
+          return corrected ?? currentAnnotations[i]?.description ?? '';
+        }).join('');
+
+        group.forEach(i => {
+          currentMergeMap.set(i, { groupId, combinedText });
+        });
+      });
+
+      // Apply correctedText to non-merged tokens too
+      if (result.correctedText) {
+        Object.entries(result.correctedText).forEach(([idxStr, text]) => {
+          const i = parseInt(idxStr, 10);
+          if (!currentMergeMap.has(i) && currentAnnotations[i]) {
+            currentAnnotations[i] = { ...currentAnnotations[i], description: text };
+          }
+        });
+      }
+
+      enhanceMode           = true;
+      btn.textContent       = '✦ Enhanced';
+      btn.dataset.active    = 'true';
+      btn.disabled          = false;
+
+      Vision.renderTapTargets(
+        currentAnnotations, el('tap-overlay'),
+        currentPhotoData.naturalWidth, currentPhotoData.naturalHeight,
+        onWordTapped, currentMergeMap
+      );
+
+      const groupCount = result.mergedGroups?.length ?? 0;
+      showToast(groupCount > 0
+        ? `${groupCount} word group${groupCount > 1 ? 's' : ''} merged`
+        : 'No segmentation errors found'
+      );
+
+    } catch (err) {
+      showToast(`Enhance failed: ${err.message}`);
+      btn.textContent = '✦ Enhance';
+      btn.disabled    = false;
+    }
+  }
+
   // ---- Settings ----
   function openSettings() {
     el('cfg-vision-key').value = Config.get('GOOGLE_VISION_API_KEY') ?? '';
@@ -388,6 +483,7 @@ const App = (() => {
     Camera.init({ onCapture: runCapture });
 
     el('camera-btn').addEventListener('click', () => Camera.open());
+    el('enhance-btn').addEventListener('click', onEnhance);
     el('sheet-backdrop').addEventListener('click', closeSheet);
     el('settings-btn').addEventListener('click', openSettings);
     el('settings-close-btn').addEventListener('click', closeSettings);
@@ -400,11 +496,13 @@ const App = (() => {
     });
     initSheetSwipe();
 
-    Dict.preload();  // start loading dict in background
+    Dict.preload();       // start loading dict in background
+    Morphology.preload(); // start loading kuromoji dict in background
     WaniKani.init();
     Anki.init().then(updateQueueBadge);
 
-    Camera.open();  // open camera immediately on launch
+    // iOS blocks camera without a user gesture, so make the empty state tappable
+    el('empty-state').addEventListener('click', () => Camera.open());
     updateQueueBadge();
 
     if ('serviceWorker' in navigator) {

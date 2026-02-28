@@ -76,5 +76,76 @@ Anki ruby furigana rules:
     }
   }
 
-  return { generateSentences };
+  // ---- Segmentation fix ----
+
+  const SEG_SYSTEM = `You are a Japanese OCR correction assistant. You will receive a numbered list of tokens detected by Google Vision OCR, along with the page layout direction. Your job is to identify tokens that should be merged into single words due to incorrect OCR segmentation.
+
+Respond ONLY with valid JSON — no markdown, no explanation:
+{
+  "mergedGroups": [[0,1], [5,6,7]],
+  "correctedText": { "3": "正しい文字" }
+}
+
+Rules:
+- mergedGroups: arrays of token indices that belong to a single word. Only include groups of 2 or more.
+- correctedText: map of index → corrected string for obvious misreads. Omit if none.
+- Do NOT merge tokens that are already correct individual words.
+- Consider the layout direction when deciding if adjacent tokens cross a line/column boundary.
+- If no corrections are needed, return { "mergedGroups": [], "correctedText": {} }`;
+
+  /**
+   * Ask Claude to fix OCR segmentation errors.
+   * @param {Array}  annotations - Vision API word annotations
+   * @param {string} layout      - 'vertical_columns_rtl' | 'horizontal_rows_ltr'
+   * @returns {Promise<{ mergedGroups: number[][], correctedText: Object }>}
+   */
+  async function fixSegmentation(annotations, layout) {
+    const apiKey = Config.get('ANTHROPIC_API_KEY');
+    if (!apiKey) throw new Error('Anthropic API key not configured. Open Settings to add it.');
+
+    const layoutDesc = layout === 'vertical_columns_rtl'
+      ? 'vertical columns reading right to left (tategumi)'
+      : 'horizontal rows reading left to right (yokogumi)';
+
+    const tokenList = annotations
+      .map((a, i) => `${i}: "${a.description}"`)
+      .join('\n');
+
+    const userMessage =
+      `Page layout: ${layoutDesc}\n\nOCR tokens:\n${tokenList}\n\nIdentify any tokens that should be merged.`;
+
+    const response = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 1024,
+        system: SEG_SYSTEM,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `Claude API error ${response.status}`);
+    }
+
+    const data    = await response.json();
+    const rawText = data.content?.[0]?.text ?? '';
+
+    try {
+      return JSON.parse(rawText.trim());
+    } catch {
+      const match = rawText.match(/\{[\s\S]*\}/);
+      if (match) return JSON.parse(match[0]);
+      throw new Error('Claude returned an unexpected response format.');
+    }
+  }
+
+  return { generateSentences, fixSegmentation };
 })();
