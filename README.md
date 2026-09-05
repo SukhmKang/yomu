@@ -1,5 +1,7 @@
 # Yomu · 読む
 
+[Open Yomu](https://yomu-omega.vercel.app) · [Render backend](https://dashboard.render.com/web/srv-dae9ckuq1p3s738elfcg) · [Vercel project](https://vercel.com/sukhmkangs-projects/yomu)
+
 A phone-first Japanese manga reader. Take a photo, tap dialogue, and understand the whole passage without leaving the page.
 
 - Native camera capture and separate photo upload. No live camera stream or browser camera permission loop.
@@ -25,7 +27,7 @@ Open http://127.0.0.1:3000. `npm run dev` restarts the server when backend files
 
 ## Deploy: Render backend + personal Vercel frontend
 
-Both hosts use this repository's `master` branch. Keep the repository root as the root directory on both hosts.
+Production is deployed to the personal Vercel workspace `sukhmkangs-projects` and the Render project `Yomu`. The configured backend is `https://yomu-api-q595.onrender.com`. Both hosts target this repository's `master` branch. Keep the repository root as the root directory on both hosts.
 
 1. Create a Render Blueprint from `render.yaml`, or create a Node web service with `npm ci --omit=dev` as build command and `npm run start:backend` as start command. Set `HOST=0.0.0.0`, `GOOGLE_VISION_API_KEY`, `OPENAI_API_KEY`, and `OPENAI_MODEL=gpt-5.6-luna`. Health endpoint: `/api/status`.
 2. Run `npm run configure:vercel -- https://YOUR-SERVICE.onrender.com` and commit the resulting `vercel.json`. This sets Vercel's same-origin `/api/*` proxy. No browser CORS configuration or frontend secrets are needed.
