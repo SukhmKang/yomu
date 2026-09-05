@@ -1,75 +1,42 @@
 // vision.js — Google Cloud Vision API + tap target rendering
 
 const Vision = (() => {
-  const VISION_ENDPOINT = 'https://vision.googleapis.com/v1/images:annotate';
   const MIN_AREA_PERCENT = 0.0001;
 
   // ---- Text detection ----
 
   async function detectText(base64Image) {
-    const apiKey = Config.get('GOOGLE_VISION_API_KEY');
-    if (!apiKey) throw new Error('Google Vision API key not configured. Open Settings to add it.');
-
-    const response = await fetch(`${VISION_ENDPOINT}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        requests: [{
-          image: { content: base64Image },
-          features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
-        }],
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err?.error?.message || `Vision API error ${response.status}`);
-    }
-
-    const data   = await response.json();
-    const result = data.responses?.[0];
-    if (result?.error) throw new Error(result.error.message);
+    const result = await API.request('vision', { image: base64Image });
 
     const annotations = result?.textAnnotations;
     if (!annotations || annotations.length < 2) throw new Error('No text detected in image.');
 
-    return annotations.slice(1);
-  }
-
-  // ---- Layout detection ----
-
-  /**
-   * Analyse bounding box positions to determine if text flows vertically or horizontally.
-   * Looks at consecutive token movements: more vertical movement → vertical columns.
-   * @param {Array} annotations
-   * @returns {'vertical_columns_rtl' | 'horizontal_rows_ltr'}
-   */
-  function detectLayout(annotations) {
-    if (annotations.length < 5) return 'horizontal_rows_ltr';
-
-    let verticalMoves = 0;
-    let horizontalMoves = 0;
-
-    for (let i = 0; i < annotations.length - 1; i++) {
-      const a = getCenter(annotations[i]);
-      const b = getCenter(annotations[i + 1]);
-      const dx = Math.abs(b.x - a.x);
-      const dy = Math.abs(b.y - a.y);
-      if (dy > dx) verticalMoves++;
-      else horizontalMoves++;
+    const paragraphs = (result.fullTextAnnotation?.pages || []).flatMap(page => (page.blocks || []).flatMap(block => block.paragraphs || []));
+    const bubbles = paragraphs.map(paragraph => ({ description: (paragraph.words || []).map(word => (word.symbols || []).map(s => s.text).join('')).join(''), boundingPoly: paragraph.boundingBox })).filter(b => b.description && b.boundingPoly);
+    // Japanese OCR often emits one box per character. Segment full paragraphs so
+    // compounds like 勉強 remain one tappable word, then union their symbol boxes.
+    const segmenter = new Intl.Segmenter('ja', { granularity: 'word' });
+    const words = [];
+    for (const paragraph of paragraphs) {
+      const symbols = (paragraph.words || []).flatMap(w => w.symbols || []);
+      const text = symbols.map(s => s.text).join('');
+      if (!symbols.every(s => s.boundingBox?.vertices)) continue;
+      for (const part of segmenter.segment(text)) {
+        if (!part.isWordLike) continue;
+        let offset = 0; const points = [];
+        for (const symbol of symbols) {
+          const end = offset + symbol.text.length;
+          if (end > part.index && offset < part.index + part.segment.length) points.push(...symbol.boundingBox.vertices);
+          offset = end;
+        }
+        if (!points.length) continue;
+        const xs = points.map(p => p.x || 0), ys = points.map(p => p.y || 0);
+        const left = Math.min(...xs), right = Math.max(...xs), top = Math.min(...ys), bottom = Math.max(...ys);
+        words.push({ description: part.segment, boundingPoly: { vertices: [{ x:left,y:top },{ x:right,y:top },{ x:right,y:bottom },{ x:left,y:bottom }] } });
+      }
     }
+    return { annotations: words.length ? words : annotations.slice(1), fullText: result.fullTextAnnotation?.text || annotations[0].description, bubbles };
 
-    return verticalMoves > horizontalMoves ? 'vertical_columns_rtl' : 'horizontal_rows_ltr';
-  }
-
-  function getCenter(annotation) {
-    const v  = annotation.boundingPoly?.vertices ?? [];
-    const xs = v.map(p => p.x ?? 0);
-    const ys = v.map(p => p.y ?? 0);
-    return {
-      x: (Math.min(...xs) + Math.max(...xs)) / 2,
-      y: (Math.min(...ys) + Math.max(...ys)) / 2,
-    };
   }
 
   // ---- Tap target rendering ----
@@ -102,12 +69,14 @@ const Vision = (() => {
 
       if ((w * h) / imageArea < MIN_AREA_PERCENT) return;
 
-      const target = document.createElement('div');
+      const target = document.createElement('button');
       target.style.left   = `${(minX / imgW) * 100}%`;
       target.style.top    = `${(minY / imgH) * 100}%`;
       target.style.width  = `${(w    / imgW) * 100}%`;
       target.style.height = `${(h    / imgH) * 100}%`;
       target.dataset.idx  = idx;
+      target.type = 'button';
+      target.setAttribute('aria-label', annotation.description);
 
       const mergeInfo = mergeMap?.get(idx);
       if (mergeInfo) {
@@ -147,5 +116,5 @@ const Vision = (() => {
     return annotations.slice(start, end + 1).map(a => a.description).join('');
   }
 
-  return { detectText, detectLayout, renderTapTargets };
+  return { detectText, renderTapTargets };
 })();

@@ -9,3 +9,11 @@ js/config.js
 .vscode/
 .idea/
 *.swp
+
+node_modules/
+.env.*
+!.env.example
+.vercel/
+test-results/
+
+frontend/dict/entries/
