@@ -12,7 +12,7 @@ const App = (() => {
     toastTimer;
   const explanationCache = new Map();
   const emptyExplanation = $("explanation").innerHTML;
-  let zoom = 1;
+  let zoom = 1, multiSelect = false, unlocked = false;
   const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
   function showToast(message) {
     $("toast").textContent = message;
@@ -24,7 +24,7 @@ const App = (() => {
     updateJump();
     explanationVersion++;
     $("explain-btn").disabled = false;
-    $("explain-btn").textContent = "Explain this ↗";
+    $("explain-btn").textContent = "Explain";
     $("explanation").innerHTML = emptyExplanation;
   }
   function resetPage() {
@@ -42,7 +42,10 @@ const App = (() => {
     fullText = "";
     photo = null;
     mode = "bubble";
-    $("selected-text").value = "";
+    multiSelect = false;
+    $("multi-select").setAttribute("aria-pressed", "false");
+    $("tap-overlay").classList.remove("multi-select");
+    $("selected-text").textContent = "";
     updateJump();
     $("tap-overlay").replaceChildren();
     $("text-page").replaceChildren();
@@ -55,7 +58,7 @@ const App = (() => {
     window.scrollTo({ top: 0 });
   }
   function updateSelection() {
-    $("selected-text").value = [...selected]
+    $("selected-text").textContent = [...selected]
       .sort((a, b) => a - b)
       .map((i) => bubbles[i]?.description || "")
       .join("\n");
@@ -74,10 +77,6 @@ const App = (() => {
   function renderPage() {
     $("bubble-mode").setAttribute("aria-pressed", mode === "bubble");
     $("word-mode").setAttribute("aria-pressed", mode === "word");
-    $("selection-hint").textContent =
-      mode === "bubble"
-        ? "Tap a bubble to select it. Select more to join a passage."
-        : "Tap a word for its reading and definition.";
     $("text-page").classList.toggle("hidden", !!photo);
     if (photo) {
       const items = mode === "bubble" ? bubbles : annotations;
@@ -127,21 +126,6 @@ const App = (() => {
       });
     }
   }
-  function readText() {
-    const text = $("paste-text").value.trim();
-    if (!text) return showToast("Paste a little Japanese text first.");
-    resetPage();
-    fullText = text;
-    bubbles = text
-      .split(/\n+/)
-      .filter((s) => s.trim())
-      .map((description) => ({ description }));
-    $("page-status").textContent =
-      `${bubbles.length} passage${bubbles.length === 1 ? "" : "s"} · ready to read`;
-    renderPage();
-    selectBubble(0);
-    saveSession();
-  }
   async function scan() {
     const version = pageVersion;
     $("scan-state").textContent = "Finding the text on your page…";
@@ -155,14 +139,14 @@ const App = (() => {
       // Vision paragraphs are editable text-region candidates, not guaranteed manga bubble boundaries.
       bubbles = result.bubbles.length ? result.bubbles : annotations;
       $("page-status").textContent =
-        `${bubbles.length} text regions · ready to read`;
+        `${bubbles.length} regions`;
       $("scan-state").classList.add("hidden");
       renderPage();
       saveSession();
     } catch (err) {
       if (version !== pageVersion) return;
       $("scan-state").textContent =
-        `${err.message} You can also type the passage beside the page.`;
+        err.message;
       $("scan-state").classList.add("error");
       $("retry-ocr").classList.remove("hidden");
       $("page-status").textContent = "Scan needs attention";
@@ -203,38 +187,11 @@ const App = (() => {
     return div;
   }
   function renderExplanation(result) {
-    const container = $("explanation");
-    container.replaceChildren();
-    container.append(
-      section("In simple Japanese", result.simpleJapanese, "ja"),
-      section("What it means", result.meaning),
-      section("Reading", result.reading, "ja"),
-    );
-    if (result.grammar.length) {
-      const group = section("How it works", "");
-      result.grammar.forEach((item) => {
-        const div = document.createElement("div");
-        div.className = "grammar-item";
-        const strong = document.createElement("strong");
-        strong.textContent = item.pattern;
-        const p = document.createElement("p");
-        p.textContent = item.explanation;
-        div.append(strong, p);
-        group.append(div);
-      });
-      container.append(group);
-    }
-    container.append(section("Between the lines", result.nuance));
-    const note = document.createElement("p");
-    note.className = "micro";
-    note.textContent =
-      "AI explanations can miss nuance. Correct the selected text if the scan looks wrong.";
-    note.style.marginTop = "20px";
-    container.append(note);
+    $("explanation").replaceChildren(section("やさしく説明", result.simpleJapanese, "ja"));
   }
   async function explain() {
-    const text = $("selected-text").value.trim();
-    if (!text) return showToast("Select a bubble or enter a passage first.");
+    const text = $("selected-text").textContent.trim();
+    if (!text) return showToast("Select a bubble first.");
     const level = $("learner-level").value,
       context = fullText.slice(0, 6000),
       key = JSON.stringify([text, context, level]);
@@ -262,7 +219,7 @@ const App = (() => {
     } finally {
       if (version === explanationVersion) {
         $("explain-btn").disabled = false;
-        $("explain-btn").textContent = "Explain this ↗";
+        $("explain-btn").textContent = "Explain";
       }
     }
   }
@@ -307,29 +264,6 @@ const App = (() => {
         $("word-content").textContent = err.message;
     }
   }
-  async function serviceStatus() {
-    try {
-      const status = await API.request("status");
-      $("service-status").textContent =
-        status.vision && status.explanations
-          ? "● Ready to read"
-          : "○ Server setup needed";
-      $("connection-details").replaceChildren();
-      for (const [label, ready] of [
-        ["Photo scanning", status.vision],
-        ["Passage explanations", status.explanations],
-      ]) {
-        const p = document.createElement("p");
-        p.textContent = `${ready ? "●" : "○"} ${label} — ${ready ? "configured" : "add credentials to backend .env / Render environment"}`;
-        $("connection-details").append(p);
-      }
-    } catch {
-      $("service-status").textContent =
-        "○ Offline · dictionary available once loaded";
-      $("connection-details").textContent =
-        "The backend is unreachable. Check your connection and deployment.";
-    }
-  }
   function saveSession() {
     ReadingSession.save({ photo, annotations, bubbles, fullText });
     $("resume-btn").classList.remove("hidden");
@@ -337,7 +271,7 @@ const App = (() => {
   function updateJump() {
     $("selection-jump").classList.toggle(
       "hidden",
-      !$("selected-text").value.trim() ||
+      !unlocked || !$("selected-text").textContent.trim() ||
         $("reader").classList.contains("hidden"),
     );
   }
@@ -374,7 +308,7 @@ const App = (() => {
       $("photo-container").classList.remove("hidden");
       $("photo-zoom").classList.remove("hidden");
     }
-    $("page-status").textContent = "Last page · ready to read";
+    $("page-status").textContent = "";
     renderPage();
   };
   $("forget-page").onclick = async () => {
@@ -389,12 +323,6 @@ const App = (() => {
   $("upload-btn").onclick = () => $("upload-input").click();
   $("camera-input").onchange = importPhoto;
   $("upload-input").onchange = importPhoto;
-  $("read-btn").onclick = readText;
-  $("demo-btn").onclick = () => {
-    $("paste-text").value =
-      "そんなに無理しなくてもいいんだよ。\nたまには、立ち止まってもいい。";
-    readText();
-  };
   $("new-page").onclick = () => {
     resetPage();
     $("reader").classList.add("hidden");
@@ -410,27 +338,82 @@ const App = (() => {
   };
   $("word-mode").onclick = () => {
     mode = "word";
+    multiSelect = false;
+    $("multi-select").setAttribute("aria-pressed", "false");
+    $("tap-overlay").classList.remove("multi-select");
     renderPage();
   };
+  $("multi-select").onclick = () => {
+    multiSelect = !multiSelect;
+    mode = "bubble";
+    $("multi-select").setAttribute("aria-pressed", String(multiSelect));
+    $("tap-overlay").classList.toggle("multi-select", multiSelect);
+    renderPage();
+  };
+  let drag = null, suppressClick = false;
+  const overlay = $("tap-overlay");
+  overlay.addEventListener("click", event => {
+    if (suppressClick) { event.preventDefault(); event.stopImmediatePropagation(); suppressClick = false; }
+  }, true);
+  overlay.addEventListener("pointerdown", event => {
+    if (!multiSelect || event.button !== 0) return;
+    const rect = document.createElement("div");
+    rect.className = "selection-rectangle";
+    overlay.append(rect);
+    drag = { x: event.clientX, y: event.clientY, initial: new Set(selected), rect, moved: false };
+    overlay.setPointerCapture(event.pointerId);
+  });
+  overlay.addEventListener("pointermove", event => {
+    if (!drag) return;
+    const left = Math.min(drag.x, event.clientX), top = Math.min(drag.y, event.clientY);
+    const right = Math.max(drag.x, event.clientX), bottom = Math.max(drag.y, event.clientY);
+    if (right-left + bottom-top < 6 && !drag.moved) return;
+    drag.moved = true;
+    const bounds = overlay.getBoundingClientRect();
+    Object.assign(drag.rect.style, {left: `${left-bounds.left}px`, top: `${top-bounds.top}px`, width: `${right-left}px`, height: `${bottom-top}px`});
+    selected = new Set(drag.initial);
+    overlay.querySelectorAll("[data-bubble]").forEach(target => {
+      const box = target.getBoundingClientRect();
+      if (box.right >= left && box.left <= right && box.bottom >= top && box.top <= bottom)
+        selected.add(Number(target.dataset.bubble));
+    });
+    updateSelection();
+  });
+  overlay.addEventListener("pointerup", event => {
+    if (!drag) return;
+    if (!drag.moved) {
+      const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-bubble]");
+      if (target) selectBubble(Number(target.dataset.bubble));
+    }
+    suppressClick = true;
+    setTimeout(() => { suppressClick = false; }, 0);
+    drag.rect.remove();
+    drag = null;
+  });
+  overlay.addEventListener("pointercancel", () => {
+    if (!drag) return;
+    selected = drag.initial;
+    drag.rect.remove();
+    drag = null;
+    updateSelection();
+  });
   $("clear-selection").onclick = () => {
     selected.clear();
     updateSelection();
   };
-  $("selected-text").oninput = invalidateExplanation;
   $("explain-btn").onclick = explain;
   try {
-    const savedLevel = localStorage.getItem("yomu_level");
+    const savedLevel = localStorage.getItem("yomu_level_v2");
     if (["N5", "N4", "N3", "N2", "N1"].includes(savedLevel))
       $("learner-level").value = savedLevel;
   } catch {}
   $("learner-level").onchange = () => {
     try {
-      localStorage.setItem("yomu_level", $("learner-level").value);
+      localStorage.setItem("yomu_level_v2", $("learner-level").value);
     } catch {}
     invalidateExplanation();
   };
   $("settings-btn").onclick = () => {
-    serviceStatus();
     $("settings-dialog").showModal();
   };
   $("settings-close").onclick = () => $("settings-dialog").close();
@@ -451,11 +434,34 @@ const App = (() => {
           dialog.close();
       }
     });
-  window.addEventListener("online", serviceStatus);
-  window.addEventListener("offline", () => {
-    $("service-status").textContent = "○ Offline";
-  });
-  serviceStatus();
+  function lock() {
+    unlocked = false;
+    $("app-shell").classList.add("hidden");
+    $("lock-screen").classList.remove("hidden");
+    $("selection-jump").classList.add("hidden");
+    for (const dialog of document.querySelectorAll("dialog")) dialog.close();
+  }
+  function unlock() {
+    unlocked = true;
+    $("lock-screen").classList.add("hidden");
+    $("app-shell").classList.remove("hidden");
+    $("password").value = "";
+    $("login-error").textContent = "";
+    updateJump();
+  }
+  window.addEventListener("yomu-locked", lock);
+  $("login-form").onsubmit = async (event) => {
+    event.preventDefault();
+    $("unlock-btn").disabled = true;
+    try { await API.request("login", {password: $("password").value}); unlock(); }
+    catch (err) { $("login-error").textContent = err.message; }
+    finally { $("unlock-btn").disabled = false; }
+  };
+  $("lock-btn").onclick = async () => {
+    try { await API.request("logout", {}); lock(); }
+    catch (err) { showToast(err.message); }
+  };
+  API.request("session").then(session => { if (session.authenticated) unlock(); }).catch(() => {});
   // Load the 69 MB dictionary only when a word is requested, not on every launch.
   if ("serviceWorker" in navigator)
     navigator.serviceWorker.register("/sw.js").catch(() => {});

@@ -15,6 +15,7 @@ const API = {
       );
     }
     const result = await response.json();
+    if (response.status === 401) window.dispatchEvent(new Event("yomu-locked"));
     if (!response.ok)
       throw new Error(result.error || "Request failed. Please retry.");
     return result;

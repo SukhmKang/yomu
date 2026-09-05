@@ -11,6 +11,10 @@ services:
         value: 22.16.0
       - key: HOST
         value: 0.0.0.0
+      - key: APP_PASSWORD
+        sync: false
+      - key: NODE_ENV
+        value: production
       - key: OPENAI_API_KEY
         sync: false
       - key: GOOGLE_VISION_API_KEY

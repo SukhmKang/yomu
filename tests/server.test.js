@@ -1,16 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "../backend/server.js";
+const cookies = new Map();
 async function server(t, options = {}) {
-  const app = createServer(options);
+  const app = createServer({...options, env: {APP_PASSWORD: "test-password", ...options.env}});
   await new Promise((resolve) => app.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise((resolve) => app.close(resolve)));
-  return `http://127.0.0.1:${app.address().port}`;
+  const base = `http://127.0.0.1:${app.address().port}`;
+  const login = await post(base + "/api/login", {password: "test-password"});
+  cookies.set(base, login.headers.get("set-cookie").split(";")[0]);
+  return base;
 }
 const post = (url, data, headers = {}) =>
   fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
+    headers: { "Content-Type": "application/json", Cookie: cookies.get(new URL(url).origin) || "", ...headers },
     body: JSON.stringify(data),
   });
 const input = {
@@ -18,13 +22,8 @@ const input = {
   context: "",
   level: "N3",
 };
-const explanation = {
-  reading: "そんなにむりしなくてもいいんだよ。",
-  simpleJapanese: "がんばりすぎなくてもいい。",
-  meaning: "You do not have to push yourself so hard.",
-  nuance: "A gentle reassurance.",
-  grammar: [{ pattern: "なくてもいい", explanation: "It is okay not to." }],
-};
+const explanation = {simpleJapanese: "がんばりすぎなくてもいい。"};
+
 test("status reveals capabilities, never credentials; server files cannot be downloaded", async (t) => {
   const base = await server(t, { env: { OPENAI_API_KEY: "super-secret" } });
   const status = await (await fetch(base + "/api/status")).text();
@@ -61,14 +60,14 @@ test("validates methods, JSON, text length, origin and missing provider setup", 
     (
       await fetch(base + "/api/explain", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Cookie: cookies.get(base) },
         body: "oops",
       })
     ).status,
     400,
   );
   assert.equal(
-    (await fetch(base + "/api/explain", { method: "POST", body: "{}" })).status,
+    (await fetch(base + "/api/explain", { method: "POST", body: "{}", headers: {Cookie: cookies.get(base)} })).status,
     415,
   );
   assert.equal(
@@ -109,7 +108,8 @@ test("explanation uses server credentials and preserves whole selected passage a
   assert.equal(request.headers.Authorization, "Bearer private-key");
   const body = JSON.parse(request.body);
   assert.deepEqual(JSON.parse(body.input[0].content), input);
-  assert(body.instructions.includes("entire selected speech bubble"));
+  assert(body.instructions.includes("日本語だけ"));
+  assert.deepEqual(body.text.format.schema.required, ["simpleJapanese"]);
 });
 test("malformed AI output and provider errors are recoverable without leaking secrets", async (t) => {
   const base = await server(t, {
@@ -154,4 +154,22 @@ test("OCR uses a server-only header and returns paragraphs for selection", async
     (await post(base + "/api/vision", { image: "bad ! image" })).status,
     400,
   );
+});
+
+test("password protects paid APIs and persistent signed sessions reject tampering", async (t) => {
+  const base = await server(t, {env: {NODE_ENV: "production"}});
+  for (const route of ["vision", "explain"])
+    assert.equal((await post(base + "/api/" + route, {}, {Cookie: ""})).status, 401);
+  assert.equal((await post(base + "/api/login", {password: "wrong"})).status, 401);
+  const login = await post(base + "/api/login", {password: "test-password"});
+  const cookie = login.headers.get("set-cookie");
+  for (const flag of ["HttpOnly", "Secure", "SameSite=Strict", "Max-Age=7776000"]) assert(cookie.includes(flag));
+  assert(!cookie.includes("test-password"));
+  const session = async (value) => (await fetch(base + "/api/session", {headers: {Cookie: value}})).json();
+  assert.equal((await session(cookie.split(";")[0])).authenticated, true);
+  assert.equal((await session(cookie.split(";")[0] + "a")).authenticated, false);
+  const logout = await post(base + "/api/logout", {});
+  assert(logout.headers.get("set-cookie").includes("Max-Age=0"));
+  for (let i = 0; i < 10; i++) await post(base + "/api/login", {password: "wrong"});
+  assert.equal((await post(base + "/api/login", {password: "wrong"})).status, 429);
 });

@@ -6,49 +6,37 @@ const result = {
   nuance: "A gentle reassurance.",
   grammar: [{ pattern: "なくてもいい", explanation: "It is okay not to." }],
 };
-test.beforeEach(async ({ page }) => {
-  await page.route("**/api/status", (route) =>
-    route.fulfill({ json: { vision: true, explanations: true } }),
-  );
+async function photo(page) {
+  await page.route("**/api/vision", route => route.fulfill({json: {
+    textAnnotations: [{description: "そんなに無理しなくてもいいんだよ。"}, {description: "無理", boundingPoly: {vertices: [{x:20,y:20},{x:160,y:20},{x:160,y:100},{x:20,y:100}]}}]
+  }}));
+  await page.locator("#upload-input").setInputFiles("frontend/icons/icon-512.png");
+  await page.locator(".tap-target").first().click();
+}
+test.beforeEach(async ({page}) => {
+  await page.route("**/api/session", route => route.fulfill({json: {authenticated: true}}));
 });
-test("phone reading flow: selection, explanation, cache, correction, level, dictionary", async ({
-  page,
-}) => {
+test("photo selection, explanation cache, level and dictionary", async ({page}) => {
   const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("pageerror", e => errors.push(e.message));
   let count = 0;
-  await page.route("**/api/explain", async (route) => {
-    count++;
-    expect(route.request().postDataJSON().text).toContain("そんなに");
-    await route.fulfill({ json: result });
-  });
+  await page.route("**/api/explain", route => { count++; return route.fulfill({json: result}); });
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "Stay in the story." }),
-  ).toBeVisible();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-  ).toBeTruthy();
-  await page.getByRole("button", { name: "Try an example" }).click();
-  await expect(page.locator("#selected-text")).toHaveValue(
-    "そんなに無理しなくてもいいんだよ。",
-  );
-  await page.getByRole("button", { name: "Explain this" }).click();
-  await expect(page.getByText(result.meaning, { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Explain this" }).click();
+  await expect(page.locator("#welcome")).toBeVisible();
+  await expect(page.locator("textarea")).toHaveCount(0);
+  await photo(page);
+  await expect(page.locator("#learner-level")).toHaveValue("N2");
+  await page.locator("#explain-btn").click();
+  await expect(page.getByText(result.simpleJapanese, {exact:true})).toBeVisible();
+  await page.locator("#explain-btn").click();
   expect(count).toBe(1);
   await page.locator("#learner-level").selectOption("N4");
-  await page.getByRole("button", { name: "Explain this" }).click();
-  await expect(page.getByText(result.meaning, { exact: true })).toBeVisible();
+  await page.locator("#explain-btn").click();
+  await expect(page.getByText(result.simpleJapanese, {exact:true})).toBeVisible();
   expect(count).toBe(2);
-  await page.getByRole("button", { name: "Words", exact: true }).click();
-  await page.getByRole("button", { name: "無理", exact: true }).click();
+  await page.locator("#word-mode").click();
+  await page.locator(".tap-target").first().click();
   await expect(page.locator("#word-content")).toContainText("むり");
-  await page.getByRole("button", { name: "Close definition" }).click();
-  await page.getByRole("button", { name: "New page" }).click();
-  await expect(page.locator("#welcome")).toBeVisible();
   expect(errors).toEqual([]);
 });
 test("OCR upload, combine bubbles, word lookup and retry", async ({ page }) => {
@@ -108,10 +96,23 @@ test("OCR upload, combine bubbles, word lookup and retry", async ({ page }) => {
   await page.getByRole("button", { name: "Retry scan" }).click();
   await page.locator(".tap-target").first().click();
   await page.locator(".tap-target").nth(1).click();
-  await expect(page.locator("#selected-text")).toHaveValue("日本語\n漫画");
+  await expect(page.locator("#selected-text")).toHaveText("日本語\n漫画");
   await expect(page.locator(".tap-target.active")).toHaveCount(2);
   await page.locator(".tap-target").first().click();
-  await expect(page.locator("#selected-text")).toHaveValue("漫画");
+  await expect(page.locator("#selected-text")).toHaveText("漫画");
+  await page.locator("#clear-selection").click();
+  await page.locator("#multi-select").click();
+  await page.locator("#photo-container").scrollIntoViewIfNeeded();
+  await page.locator(".tap-target").first().hover();
+  const first = await page.locator(".tap-target").first().boundingBox();
+  const last = await page.locator(".tap-target").nth(1).boundingBox();
+  await page.mouse.move(first.x + 1, first.y + 1);
+  await page.mouse.down();
+  await page.mouse.move(last.x + last.width - 1, last.y + last.height - 1, {steps: 8});
+  await page.mouse.up();
+  await expect(page.locator(".tap-target.active")).toHaveCount(2);
+  await expect(page.locator("#selected-text")).toHaveText("日本語\n漫画");
+
 });
 test("editing a selection discards an in-flight explanation", async ({
   page,
@@ -123,28 +124,50 @@ test("editing a selection discards an in-flight explanation", async ({
     await route.fulfill({ json: result });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Try an example" }).click();
-  await page.getByRole("button", { name: "Explain this" }).click();
-  await page.locator("#selected-text").fill("違う文章。");
+  await photo(page);
+  await page.getByRole("button", { name: "Explain", exact: true }).click();
+  await page.locator("#clear-selection").click();
   release();
   await expect(
-    page.getByRole("button", { name: "Explain this" }),
+    page.getByRole("button", { name: "Explain", exact: true }),
   ).toBeEnabled();
-  await expect(page.getByText(result.meaning, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(result.simpleJapanese, { exact: true })).toHaveCount(0);
 });
 test("last page survives reopening, can be forgotten, and uses only local storage", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Try an example" }).click();
-  await page.getByRole("button", { name: "New page" }).click();
+  await photo(page);
+  await page.getByRole("button", { name: "← Back" }).click();
   await expect(page.locator("#resume-btn")).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "Continue your last page" }).click();
-  await expect(page.locator("#text-page")).toContainText("そんなに無理");
-  await page.getByRole("button", { name: "Preferences" }).click();
+  await page.getByRole("button", { name: "Resume" }).click();
+  await expect(page.locator("#photo-container")).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Forget saved page" }).click();
   await page.getByRole("button", { name: "Close preferences" }).click();
-  await page.getByRole("button", { name: "New page" }).click();
+  await page.getByRole("button", { name: "← Back" }).click();
   await expect(page.locator("#resume-btn")).toBeHidden();
+});
+
+test("unlock is remembered after reopening and Lock clears it", async ({page, context}) => {
+  await page.unroute("**/api/session");
+  await page.goto("/");
+  await expect(page.locator("#lock-screen")).toBeVisible();
+  await page.locator("#password").fill("incorrect");
+  await page.locator("#unlock-btn").click();
+  await expect(page.locator("#login-error")).toContainText("Incorrect");
+  await page.locator("#password").fill("browser-test-password");
+  await page.locator("#unlock-btn").click();
+  await expect(page.locator("#welcome")).toBeVisible();
+  const cookies = await context.cookies();
+  expect(cookies.find(c => c.name === "yomu_session").httpOnly).toBe(true);
+  const reopened = await context.newPage();
+  await reopened.goto("/");
+  await expect(reopened.locator("#welcome")).toBeVisible();
+  await reopened.locator("#settings-btn").click();
+  await reopened.locator("#lock-btn").click();
+  await expect(reopened.locator("#lock-screen")).toBeVisible();
+  await reopened.reload();
+  await expect(reopened.locator("#app-shell")).toBeHidden();
 });

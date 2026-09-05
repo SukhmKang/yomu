@@ -1,4 +1,4 @@
-const CACHE = "yomu-v3";
+const CACHE = "yomu-v4";
 const SHELL = [
   "/",
   "/index.html",
