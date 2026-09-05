@@ -1,43 +1,223 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Read Japanese at your own pace. Understand the words, and what they really mean.">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="読む">
-  <meta name="theme-color" content="#141815">
-  <title>Yomu — a little closer to Japanese</title>
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icons/icon-180.png">
-  <link rel="stylesheet" href="css/styles.css">
-</head>
-<body>
-  <header class="header"><a class="brand" href="/" aria-label="Yomu home"><span lang="ja">読む</span><span>yomu<span class="brand-note">YOUR JAPANESE READING COMPANION</span></span></a><button id="settings-btn" class="quiet-button">Preferences</button></header>
-  <main>
-    <section id="welcome" class="welcome">
-      <div class="eyebrow">A LITTLE CLOSER TO JAPANESE</div>
-      <h1>Stay in the story.</h1>
-      <p class="intro">A word you don't know. A line you almost understand.<br>Make sense of it, then keep reading.</p>
-      <div class="entry-actions"><button id="camera-btn" class="primary">＋ Take a photo</button><button id="upload-btn" class="secondary">Upload a page <span>↗</span></button></div>
-      <p class="micro">Books, manga, screenshots. Bring whatever you're reading.</p>
-      <button id="resume-btn" class="resume-button hidden">Continue your last page →</button><div class="text-entry"><label for="paste-text">OR START WITH A LITTLE TEXT</label><textarea id="paste-text" lang="ja" rows="3" maxlength="6000" placeholder="気になる日本語を、ここに。"></textarea><div class="text-entry-footer"><button id="demo-btn" class="text-button">Try an example</button><button id="read-btn" class="text-button">Read this text →</button></div></div>
-      <div class="how-it-works"><div><span>01</span><h3>Bring a page</h3><p>Capture a photo or paste a passage.</p></div><div><span>02</span><h3>Find your meaning</h3><p>Look up a word. Unpack a whole bubble.</p></div><div><span>03</span><h3>Keep going</h3><p>Less switching apps. More reading.</p></div></div>
-    </section>
-    <section id="reader" class="reader hidden" aria-label="Japanese reader">
-      <div class="reader-top"><button id="new-page" class="text-button">← New page</button><span id="page-status" class="micro" role="status"></span></div>
-      <div class="reader-grid"><div class="page-column"><div class="reader-toolbar"><div class="mode-switch" aria-label="Selection mode"><button id="bubble-mode" aria-pressed="true">Text bubbles</button><button id="word-mode" aria-pressed="false">Words</button></div><button id="retry-ocr" class="text-button hidden">Retry scan</button></div><p id="selection-hint" class="micro">Tap a bubble to select it. Select more to join a passage.</p><div id="photo-zoom" class="photo-zoom hidden"><span class="micro">Page zoom</span><button id="zoom-out" class="quiet-button" aria-label="Zoom out">−</button><span id="zoom-label" class="micro">100%</span><button id="zoom-in" class="quiet-button" aria-label="Zoom in">＋</button></div><div id="photo-scroll"><div id="photo-container" class="hidden"><img id="photo-img" alt="Your Japanese page"><div id="tap-overlay"></div></div></div><div id="text-page" class="text-page" lang="ja"></div><div id="scan-state" class="notice hidden" role="status"></div></div>
-      <aside class="understand" id="understand"><div class="eyebrow">READ BETWEEN THE LINES</div><h2 lang="ja">やさしく説明</h2><p class="subtle">A little help with the whole meaning.</p><label for="selected-text">Selected passage <button id="clear-selection" class="text-button">Clear</button></label><textarea id="selected-text" lang="ja" rows="4" maxlength="6000" placeholder="Select text on the page, or type a passage here. You can correct any scanning mistakes."></textarea><div class="explain-actions"><select id="learner-level" aria-label="Japanese learner level"><option value="N5">N5 · Beginner</option><option value="N4">N4 · Elementary</option><option value="N3" selected>N3 · Intermediate</option><option value="N2">N2 · Advanced</option><option value="N1">N1 · Proficient</option></select><button id="explain-btn" class="primary">Explain this ↗</button></div><div id="explanation" aria-live="polite"><div class="explanation-empty"><span>言葉の、その先へ。</span><p>Understand the meaning, the grammar,<br>and what’s left unsaid.</p></div></div></aside></div>
-    </section>
-    <footer><span>読む <span class="subtle">· One page at a time.</span></span><span id="service-status" role="status">Connecting…</span></footer>
-  </main>
-  <button id="selection-jump" class="selection-jump hidden">Explain selected passage ↓</button>
-  <input type="file" id="camera-input" accept="image/*" capture="environment" hidden>
-  <input type="file" id="upload-input" accept="image/*" hidden>
-  <dialog id="settings-dialog"><div class="dialog-heading"><h2>Preferences</h2><button id="settings-close" class="quiet-button" aria-label="Close preferences">✕</button></div><p>Choose your Japanese level beside “Explain this.” Your preference is saved on this device.</p><button id="forget-page" class="text-button">Forget saved page</button><h3>Connected services</h3><div id="connection-details"></div><p class="micro">Service credentials are configured on the backend. Photos and passages are sent to the reading services when you scan or explain them.</p></dialog>
-  <dialog id="word-dialog"><div class="dialog-heading"><span class="eyebrow">WORD LOOKUP</span><button id="word-close" class="quiet-button" aria-label="Close definition">✕</button></div><div id="word-content" aria-live="polite"></div></dialog>
-  <div id="toast" class="hidden" role="status"></div>
-  <script src="js/api.js" defer></script><script src="js/kuromoji.js" defer></script><script src="js/morphology.js" defer></script><script src="js/dict.js" defer></script><script src="js/explanations.js" defer></script><script src="js/vision.js" defer></script><script src="js/camera.js" defer></script><script src="js/session.js" defer></script><script src="js/app.js" defer></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta
+      name="description"
+      content="Read Japanese at your own pace. Understand the words, and what they really mean."
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="読む" />
+    <meta name="theme-color" content="#141815" />
+    <title>Yomu — a little closer to Japanese</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <header class="header">
+      <a class="brand" href="/" aria-label="Yomu home"
+        ><span lang="ja">読む</span
+        ><span
+          >yomu<span class="brand-note"
+            >YOUR JAPANESE READING COMPANION</span
+          ></span
+        ></a
+      ><button id="settings-btn" class="quiet-button">Preferences</button>
+    </header>
+    <main>
+      <section id="welcome" class="welcome">
+        <div class="eyebrow">A LITTLE CLOSER TO JAPANESE</div>
+        <h1>Stay in the story.</h1>
+        <p class="intro">
+          A word you don't know. A line you almost understand.<br />Make sense
+          of it, then keep reading.
+        </p>
+        <div class="entry-actions">
+          <button id="camera-btn" class="primary">＋ Take a photo</button
+          ><button id="upload-btn" class="secondary">
+            Upload a page <span>↗</span>
+          </button>
+        </div>
+        <p class="micro">
+          Books, manga, screenshots. Bring whatever you're reading.
+        </p>
+        <button id="resume-btn" class="resume-button hidden">
+          Continue your last page →
+        </button>
+        <div class="text-entry">
+          <label for="paste-text">OR START WITH A LITTLE TEXT</label
+          ><textarea
+            id="paste-text"
+            lang="ja"
+            rows="3"
+            maxlength="6000"
+            placeholder="気になる日本語を、ここに。"
+          ></textarea>
+          <div class="text-entry-footer">
+            <button id="demo-btn" class="text-button">Try an example</button
+            ><button id="read-btn" class="text-button">Read this text →</button>
+          </div>
+        </div>
+        <div class="how-it-works">
+          <div>
+            <span>01</span>
+            <h3>Bring a page</h3>
+            <p>Capture a photo or paste a passage.</p>
+          </div>
+          <div>
+            <span>02</span>
+            <h3>Find your meaning</h3>
+            <p>Look up a word. Unpack a whole bubble.</p>
+          </div>
+          <div>
+            <span>03</span>
+            <h3>Keep going</h3>
+            <p>Less switching apps. More reading.</p>
+          </div>
+        </div>
+      </section>
+      <section id="reader" class="reader hidden" aria-label="Japanese reader">
+        <div class="reader-top">
+          <button id="new-page" class="text-button">← New page</button
+          ><span id="page-status" class="micro" role="status"></span>
+        </div>
+        <div class="reader-grid">
+          <div class="page-column">
+            <div class="reader-toolbar">
+              <div class="mode-switch" aria-label="Selection mode">
+                <button id="bubble-mode" aria-pressed="true">
+                  Text bubbles</button
+                ><button id="word-mode" aria-pressed="false">Words</button>
+              </div>
+              <button id="retry-ocr" class="text-button hidden">
+                Retry scan
+              </button>
+            </div>
+            <p id="selection-hint" class="micro">
+              Tap a bubble to select it. Select more to join a passage.
+            </p>
+            <div id="photo-zoom" class="photo-zoom hidden">
+              <span class="micro">Page zoom</span
+              ><button id="zoom-out" class="quiet-button" aria-label="Zoom out">
+                −</button
+              ><span id="zoom-label" class="micro">100%</span
+              ><button id="zoom-in" class="quiet-button" aria-label="Zoom in">
+                ＋
+              </button>
+            </div>
+            <div id="photo-scroll">
+              <div id="photo-container" class="hidden">
+                <img id="photo-img" alt="Your Japanese page" />
+                <div id="tap-overlay"></div>
+              </div>
+            </div>
+            <div id="text-page" class="text-page" lang="ja"></div>
+            <div id="scan-state" class="notice hidden" role="status"></div>
+          </div>
+          <aside class="understand" id="understand">
+            <div class="eyebrow">READ BETWEEN THE LINES</div>
+            <h2 lang="ja">やさしく説明</h2>
+            <p class="subtle">A little help with the whole meaning.</p>
+            <label for="selected-text"
+              >Selected passage
+              <button id="clear-selection" class="text-button">
+                Clear
+              </button></label
+            ><textarea
+              id="selected-text"
+              lang="ja"
+              rows="4"
+              maxlength="6000"
+              placeholder="Select text on the page, or type a passage here. You can correct any scanning mistakes."
+            ></textarea>
+            <div class="explain-actions">
+              <select id="learner-level" aria-label="Japanese learner level">
+                <option value="N5">N5 · Beginner</option>
+                <option value="N4">N4 · Elementary</option>
+                <option value="N3" selected>N3 · Intermediate</option>
+                <option value="N2">N2 · Advanced</option>
+                <option value="N1">N1 · Proficient</option></select
+              ><button id="explain-btn" class="primary">Explain this ↗</button>
+            </div>
+            <div id="explanation" aria-live="polite">
+              <div class="explanation-empty">
+                <span>言葉の、その先へ。</span>
+                <p>
+                  Understand the meaning, the grammar,<br />and what’s left
+                  unsaid.
+                </p>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+      <footer>
+        <span>読む <span class="subtle">· One page at a time.</span></span
+        ><span id="service-status" role="status">Connecting…</span>
+      </footer>
+    </main>
+    <button id="selection-jump" class="selection-jump hidden">
+      Explain selected passage ↓
+    </button>
+    <input
+      type="file"
+      id="camera-input"
+      accept="image/*"
+      capture="environment"
+      hidden
+    />
+    <input type="file" id="upload-input" accept="image/*" hidden />
+    <dialog id="settings-dialog">
+      <div class="dialog-heading">
+        <h2>Preferences</h2>
+        <button
+          id="settings-close"
+          class="quiet-button"
+          aria-label="Close preferences"
+        >
+          ✕
+        </button>
+      </div>
+      <p>
+        Choose your Japanese level beside “Explain this.” Your preference is
+        saved on this device.
+      </p>
+      <button id="forget-page" class="text-button">Forget saved page</button>
+      <h3>Connected services</h3>
+      <div id="connection-details"></div>
+      <p class="micro">
+        Service credentials are configured on the backend. Photos and passages
+        are sent to the reading services when you scan or explain them.
+      </p>
+    </dialog>
+    <dialog id="word-dialog">
+      <div class="dialog-heading">
+        <span class="eyebrow">WORD LOOKUP</span
+        ><button
+          id="word-close"
+          class="quiet-button"
+          aria-label="Close definition"
+        >
+          ✕
+        </button>
+      </div>
+      <div id="word-content" aria-live="polite"></div>
+    </dialog>
+    <div id="toast" class="hidden" role="status"></div>
+    <script src="js/api.js" defer></script>
+    <script src="js/kuromoji.js" defer></script>
+    <script src="js/morphology.js" defer></script>
+    <script src="js/dict.js" defer></script>
+    <script src="js/explanations.js" defer></script>
+    <script src="js/vision.js" defer></script>
+    <script src="js/camera.js" defer></script>
+    <script src="js/session.js" defer></script>
+    <script src="js/app.js" defer></script>
+  </body>
 </html>

@@ -1,2 +1,19 @@
-import { defineConfig, devices } from '@playwright/test';
-export default defineConfig({ testDir:'tests/browser', fullyParallel:true, use:{baseURL:'http://127.0.0.1:3000',serviceWorkers:'block'}, projects:[{name:'iPhone WebKit',use:{...devices['iPhone 13'],defaultBrowserType:'webkit'}},{name:'desktop Chromium',use:{...devices['Desktop Chrome']}}], webServer:{command:'npm start',url:'http://127.0.0.1:3000',reuseExistingServer:true}, reporter:'list' });
+import { defineConfig, devices } from "@playwright/test";
+export default defineConfig({
+  testDir: "tests/browser",
+  fullyParallel: true,
+  use: { baseURL: "http://127.0.0.1:3000", serviceWorkers: "block" },
+  projects: [
+    {
+      name: "iPhone WebKit",
+      use: { ...devices["iPhone 13"], defaultBrowserType: "webkit" },
+    },
+    { name: "desktop Chromium", use: { ...devices["Desktop Chrome"] } },
+  ],
+  webServer: {
+    command: "npm start",
+    url: "http://127.0.0.1:3000",
+    reuseExistingServer: true,
+  },
+  reporter: "list",
+});
