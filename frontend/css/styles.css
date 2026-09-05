@@ -682,3 +682,7 @@ dialog h3 {
 .selection-rectangle { position: absolute; border: 2px solid #d2efa3; background: #d2efa330; pointer-events: none; z-index: 2; }
 #multi-select[aria-pressed="true"] { background: #d2efa3; color: #141815; }
 .reader-toolbar { flex-wrap: wrap; gap: 8px; }
+.welcome { max-width: 480px; margin: 20px auto; padding: 24px; }
+.entry-actions { margin-top: 0; }
+.entry-actions button { flex: 1; }
+.brand > span:first-child { border: 0; padding-right: 0; }
