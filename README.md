@@ -27,7 +27,7 @@ Open http://127.0.0.1:3000. `npm run dev` restarts the server when backend files
 
 Both hosts use this repository's `master` branch. Keep the repository root as the root directory on both hosts.
 
-1. Create a Render Blueprint from `render.yaml`, or create a Node web service with `npm ci --omit=dev` as build command and `npm start` as start command. Set `HOST=0.0.0.0`, `GOOGLE_VISION_API_KEY`, `OPENAI_API_KEY`, and `OPENAI_MODEL=gpt-5.6-luna`. Health endpoint: `/api/status`.
+1. Create a Render Blueprint from `render.yaml`, or create a Node web service with `npm ci --omit=dev` as build command and `npm run start:backend` as start command. Set `HOST=0.0.0.0`, `GOOGLE_VISION_API_KEY`, `OPENAI_API_KEY`, and `OPENAI_MODEL=gpt-5.6-luna`. Health endpoint: `/api/status`.
 2. Run `npm run configure:vercel -- https://YOUR-SERVICE.onrender.com` and commit the resulting `vercel.json`. This sets Vercel's same-origin `/api/*` proxy. No browser CORS configuration or frontend secrets are needed.
 3. Import the repo into **your personal Vercel workspace**. Use framework “Other”, build command `npm run build`, output directory `frontend`. The checked-in config supplies these values.
 4. Set Render's `ALLOWED_ORIGINS` to the actual Vercel production origin (for example `https://your-yomu.vercel.app`, without trailing slash). Additional preview origins can be comma-separated.

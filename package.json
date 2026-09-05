@@ -14,7 +14,8 @@
     "build": "node scripts/build-dict.js",
     "prestart": "npm run build",
     "predev": "npm run build",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "start:backend": "node --env-file-if-exists=.env backend/server.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

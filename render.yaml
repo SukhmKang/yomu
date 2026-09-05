@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     buildCommand: npm ci --omit=dev
-    startCommand: npm start
+    startCommand: npm run start:backend
     healthCheckPath: /api/status
     envVars:
       - key: NODE_VERSION
