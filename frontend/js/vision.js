@@ -1,8 +1,6 @@
 // vision.js — Google Cloud Vision API + tap target rendering
 
 const Vision = (() => {
-  const MIN_AREA_PERCENT = 0.0001;
-
   // ---- Text detection ----
 
   async function detectText(base64Image) {
@@ -88,7 +86,6 @@ const Vision = (() => {
     mergeMap = null,
   ) {
     overlayEl.innerHTML = "";
-    const imageArea = imgW * imgH;
 
     annotations.forEach((annotation, idx) => {
       const vertices = annotation.boundingPoly?.vertices;
@@ -103,7 +100,7 @@ const Vision = (() => {
       const w = maxX - minX;
       const h = maxY - minY;
 
-      if ((w * h) / imageArea < MIN_AREA_PERCENT) return;
+      if (w <= 0 || h <= 0) return;
 
       const target = document.createElement("button");
       target.style.left = `${(minX / imgW) * 100}%`;
