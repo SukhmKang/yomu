@@ -62,7 +62,7 @@ npx playwright install chromium webkit
 npm run test:ui
 ```
 
-Browser tests run in iPhone WebKit and desktop Chromium with mocked OCR and explanation responses. They cover upload/retry, bubble selection, dictionary lookup, learner level, caching, and stale response protection. Real camera hardware and live provider quality need an actual device and valid keys.
+Browser tests run in iPhone WebKit and desktop Chromium with mocked OCR and explanation responses. They cover upload/retry, bubble selection, dictionary lookup, learner level, caching, and stale response protection. Real camera hardware needs an actual device. The offline reload test passes in Chromium; Playwright WebKit returns an internal navigation error in offline emulation, so that test is skipped and offline launch still needs a physical iPhone check. Live Vision scanning and GPT-5.6 Luna explanations have also been verified using a synthetic Japanese dialogue image.
 
 ## Data and limitations
 
