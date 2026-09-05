@@ -101,7 +101,7 @@ test("OCR upload, combine bubbles, word lookup and retry", async ({ page }) => {
   await page.locator(".tap-target").first().click();
   await expect(page.locator("#selected-text")).toHaveText("漫画");
   await page.locator("#clear-selection").click();
-  await page.locator("#multi-select").click();
+  await expect(page.locator("#multi-select")).toHaveAttribute("aria-pressed", "true");
   await page.locator("#photo-container").scrollIntoViewIfNeeded();
   await page.locator(".tap-target").first().hover();
   const first = await page.locator(".tap-target").first().boundingBox();
@@ -170,4 +170,24 @@ test("unlock is remembered after reopening and Lock clears it", async ({page, co
   await expect(reopened.locator("#lock-screen")).toBeVisible();
   await reopened.reload();
   await expect(reopened.locator("#app-shell")).toBeHidden();
+});
+
+test("next photo and upload replace the page directly with multi-select enabled", async ({page}) => {
+  await page.goto("/");
+  await photo(page);
+  await expect(page.locator("#multi-select")).toHaveAttribute("aria-pressed", "true");
+  await page.locator("#multi-select").click();
+  const cameraChooser = page.waitForEvent("filechooser");
+  await page.locator("#next-photo").click();
+  const camera = await cameraChooser;
+  await expect(page.locator("#reader")).toBeVisible();
+  await camera.setFiles("frontend/icons/icon-192.png");
+  await expect(page.locator(".tap-target")).toHaveCount(1);
+  await expect(page.locator("#selected-text")).toBeEmpty();
+  await expect(page.locator("#multi-select")).toHaveAttribute("aria-pressed", "true");
+  const uploadChooser = page.waitForEvent("filechooser");
+  await page.locator("#next-upload").click();
+  await (await uploadChooser).setFiles("frontend/icons/icon-512.png");
+  await expect(page.locator(".tap-target")).toHaveCount(1);
+  await expect(page.locator("#welcome")).toBeHidden();
 });

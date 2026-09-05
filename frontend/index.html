@@ -44,7 +44,7 @@
       <section id="reader" class="reader hidden" aria-label="Japanese reader">
         <div class="reader-top">
           <button id="new-page" class="text-button">← Back</button
-          ><span id="page-status" class="micro" role="status"></span>
+          ><div class="next-page-actions"><button id="next-photo" class="primary">Next photo</button><button id="next-upload" class="quiet-button" aria-label="Upload next image">Upload</button></div><span id="page-status" class="micro" role="status"></span>
         </div>
         <div class="reader-grid">
           <div class="page-column">
@@ -54,7 +54,7 @@
                   Bubbles</button
                 ><button id="word-mode" aria-pressed="false">Words</button>
               </div>
-              <button id="multi-select" class="quiet-button" aria-pressed="false">Select multiple</button>
+              <button id="multi-select" class="quiet-button" aria-pressed="true">Select multiple</button>
               <button id="retry-ocr" class="text-button hidden">
                 Retry scan
               </button>

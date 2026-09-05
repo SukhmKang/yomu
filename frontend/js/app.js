@@ -12,7 +12,7 @@ const App = (() => {
     toastTimer;
   const explanationCache = new Map();
   const emptyExplanation = $("explanation").innerHTML;
-  let zoom = 1, multiSelect = false, unlocked = false;
+  let zoom = 1, multiSelect = true, unlocked = false;
   const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
   function showToast(message) {
     $("toast").textContent = message;
@@ -42,9 +42,9 @@ const App = (() => {
     fullText = "";
     photo = null;
     mode = "bubble";
-    multiSelect = false;
-    $("multi-select").setAttribute("aria-pressed", "false");
-    $("tap-overlay").classList.remove("multi-select");
+    multiSelect = true;
+    $("multi-select").setAttribute("aria-pressed", "true");
+    $("tap-overlay").classList.add("multi-select");
     $("selected-text").textContent = "";
     updateJump();
     $("tap-overlay").replaceChildren();
@@ -319,8 +319,8 @@ const App = (() => {
   ReadingSession.load().then((saved) => {
     if (saved) $("resume-btn").classList.remove("hidden");
   });
-  $("camera-btn").onclick = () => $("camera-input").click();
-  $("upload-btn").onclick = () => $("upload-input").click();
+  $("camera-btn").onclick = $("next-photo").onclick = () => $("camera-input").click();
+  $("upload-btn").onclick = $("next-upload").onclick = () => $("upload-input").click();
   $("camera-input").onchange = importPhoto;
   $("upload-input").onchange = importPhoto;
   $("new-page").onclick = () => {
@@ -334,6 +334,9 @@ const App = (() => {
   };
   $("bubble-mode").onclick = () => {
     mode = "bubble";
+    multiSelect = true;
+    $("multi-select").setAttribute("aria-pressed", "true");
+    $("tap-overlay").classList.add("multi-select");
     renderPage();
   };
   $("word-mode").onclick = () => {

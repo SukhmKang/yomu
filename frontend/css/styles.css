@@ -686,3 +686,8 @@ dialog h3 {
 .entry-actions { margin-top: 0; }
 .entry-actions button { flex: 1; }
 .brand > span:first-child { border: 0; padding-right: 0; }
+
+.reader-top { position: sticky; top: 0; z-index: 12; background: var(--bg, #141815); flex-wrap: wrap; gap: 8px; padding: 10px 0; }
+.next-page-actions { display: flex; gap: 8px; margin-left: auto; }
+#page-status { flex-basis: 100%; }
+#page-status:empty { display: none; }
