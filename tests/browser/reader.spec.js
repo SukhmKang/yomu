@@ -172,6 +172,24 @@ test("unlock is remembered after reopening and Lock clears it", async ({page, co
   await expect(reopened.locator("#app-shell")).toBeHidden();
 });
 
+test("saved session survives a sleeping backend wake-up failure", async ({page}) => {
+  await page.unroute("**/api/session");
+  const login = await page.request.post("/api/login", {
+    data: {password: "browser-test-password"},
+  });
+  expect(login.ok()).toBe(true);
+  let attempts = 0;
+  await page.route("**/api/session", async (route) => {
+    attempts++;
+    if (attempts === 1) await route.abort("connectionfailed");
+    else await route.continue();
+  });
+  await page.goto("/");
+  await expect(page.locator("#login-error")).toHaveText("Waking Yomu…");
+  await expect(page.locator("#welcome")).toBeVisible({timeout: 10_000});
+  expect(attempts).toBeGreaterThanOrEqual(2);
+});
+
 test("next photo and upload replace the page directly with multi-select enabled", async ({page}) => {
   await page.goto("/");
   await photo(page);

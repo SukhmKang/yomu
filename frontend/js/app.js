@@ -464,7 +464,24 @@ const App = (() => {
     try { await API.request("logout", {}); lock(); }
     catch (err) { showToast(err.message); }
   };
-  API.request("session").then(session => { if (session.authenticated) unlock(); }).catch(() => {});
+  async function restoreSession() {
+    $("login-error").textContent = "Checking saved session…";
+    for (const delay of [0, 2000, 5000]) {
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+      if (unlocked) return;
+      try {
+        const session = await API.request("session");
+        if (session.authenticated) unlock();
+        else $("login-error").textContent = "";
+        return;
+      } catch {
+        $("login-error").textContent = "Waking Yomu…";
+      }
+    }
+    $("login-error").textContent =
+      "Could not check your saved session. Try again in a moment.";
+  }
+  restoreSession();
   // Load the 69 MB dictionary only when a word is requested, not on every launch.
   if ("serviceWorker" in navigator)
     navigator.serviceWorker.register("/sw.js").catch(() => {});
