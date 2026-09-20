@@ -79,13 +79,15 @@ enum VisionResponse {
         return ScannedPage(regions: regions, fullText: full)
     }
 
-    /// Artwork produces stray one- and two-character hits — a brush stroke read as
-    /// "C". Anything with kana or kanji is kept; a short Latin fragment is not.
+    /// A photographed page brings its surroundings with it. One scan picked up the
+    /// keycaps of the laptop the book was resting on — "Hyperorcommand", "control",
+    /// "option" — which reached the explanation as page context and got discussed
+    /// as if it were dialogue. Nothing without kana or kanji is worth reading here,
+    /// so regions are kept only if they contain some.
     private static func isMeaningful(_ text: String) -> Bool {
-        let japanese = text.unicodeScalars.contains {
+        text.unicodeScalars.contains {
             (0x3040...0x30FF).contains($0.value) || (0x4E00...0x9FFF).contains($0.value)
         }
-        return japanese || text.count >= 3
     }
 
     /// Furigana are regions of their own, and Vision often emits them first, so a
