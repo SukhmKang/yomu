@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import VisionKit
 
 /// Owns one photographed page: its OCR analysis, the current selection, and the
 /// lookups that follow from it. Selecting text is the only action — the explanation
@@ -23,10 +22,11 @@ final class ReaderModel: ObservableObject {
     }
 
     @Published private(set) var image: UIImage
-    @Published private(set) var analysis: ImageAnalysis?
+    @Published private(set) var page: ScannedPage?
     @Published private(set) var scanError: String?
     @Published private(set) var isScanning = true
 
+    @Published private(set) var selected: Set<Int> = []
     @Published private(set) var selection = ""
     @Published private(set) var explanation: Explanation = .none
     @Published private(set) var vocabulary: [VocabularyEntry] = []
@@ -34,7 +34,6 @@ final class ReaderModel: ObservableObject {
     @AppStorage("yomu.level") var level: String = "N2"
 
     private let backend: Backend
-    private let analyzer = PageAnalyzer()
     private var explainTask: Task<Void, Never>?
     private var vocabularyTask: Task<Void, Never>?
     private var cache: [String: String] = [:]
@@ -44,26 +43,29 @@ final class ReaderModel: ObservableObject {
         self.backend = backend
     }
 
-    var pageText: String { analysis?.transcript ?? "" }
+    var regions: [TextRegion] { page?.regions ?? [] }
+    var pageText: String { page?.fullText ?? "" }
 
     func scan() async {
         isScanning = true
         scanError = nil
         do {
-            analysis = try await analyzer.analyze(image)
-            if (analysis?.transcript ?? "").isEmpty {
-                scanError = "No Japanese text found on this page."
-            }
+            page = try await backend.scan(image: image)
         } catch {
             scanError = error.localizedDescription
         }
         isScanning = false
     }
 
-    /// Fired by Live Text as the reader drags. Debounced so an in-progress drag does
-    /// not spend a request per character.
-    func selectionChanged(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Regions are selected by tapping or sweeping the page. Debounced so a sweep
+    /// does not spend a request per bubble it crosses.
+    func select(_ indices: Set<Int>) {
+        selected = indices
+        let regions = self.regions
+        let trimmed = indices.sorted()
+            .compactMap { $0 < regions.count ? regions[$0].text : nil }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed != selection else { return }
         selection = trimmed
 
@@ -88,6 +90,8 @@ final class ReaderModel: ObservableObject {
             await self?.loadVocabulary(trimmed)
         }
     }
+
+    func clearSelection() { select([]) }
 
     func retryExplanation() {
         let text = selection

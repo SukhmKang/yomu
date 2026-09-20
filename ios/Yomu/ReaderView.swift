@@ -9,9 +9,10 @@ struct ReaderView: View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
 
-            LiveTextView(image: model.image,
-                         analysis: model.analysis,
-                         onSelectionChange: model.selectionChanged)
+            PageView(image: model.image,
+                     regions: model.regions,
+                     selected: model.selected,
+                     onSelect: model.select)
                 .ignoresSafeArea(edges: .horizontal)
 
             topBar

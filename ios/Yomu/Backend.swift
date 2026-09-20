@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Talks to the Yomu API for explanations. OCR and dictionary lookups are on-device,
 /// so this is the only network dependency in the app.
@@ -44,15 +45,37 @@ final class Backend: ObservableObject {
         return request
     }
 
+    /// Scan a page. The image never touches disk and is sent once, downscaled.
+    func scan(image: UIImage) async throws -> ScannedPage {
+        guard let encoded = image.downscaledJPEG() else {
+            throw YomuError.message("That photo could not be prepared for scanning.")
+        }
+        let request = try request("/api/vision", body: ["image": encoded.base64])
+        let data: Data, response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw YomuError.message("Cannot reach Yomu. Check your connection.")
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if let problem = describe(status, action: "read") { throw YomuError.message(problem) }
+        // Normalise against the size actually sent, not the original.
+        return try VisionResponse.parse(data, imageSize: encoded.size)
+    }
+
     private func explainBody(text: String, context: String, level: String) -> [String: Any] {
         ["text": text, "context": String(context.prefix(6000)), "level": level]
     }
 
-    private func describe(_ status: Int) -> String? {
+    private func describe(_ status: Int, action: String = "explain") -> String? {
         switch status {
         case 200..<300: return nil
         case 401: return "This app's API token was rejected by the server."
-        default: return "The explanation could not be produced. Please retry."
+        case 413: return "That photo was too large to send. Try again."
+        default:
+            return action == "read"
+                ? "The page could not be read. Please retry."
+                : "The explanation could not be produced. Please retry."
         }
     }
 
