@@ -24,6 +24,8 @@ targets:
       path: Yomu/Info.plist
       properties:
         CFBundleDisplayName: 読む
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         YomuAPIToken: $(YOMU_API_TOKEN)
         UILaunchScreen: {}
         UIStatusBarStyle: UIStatusBarStyleLightContent

@@ -59,6 +59,7 @@ final class Backend: ObservableObject {
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if let problem = describe(status, action: "read") { throw YomuError.message(problem) }
+        ScanArchive.save(image: encoded, response: data)
         // Normalise against the size actually sent, not the original.
         return try VisionResponse.parse(data, imageSize: encoded.size)
     }

@@ -198,9 +198,13 @@ final class ZoomablePageView: UIView, UIScrollViewDelegate, UIGestureRecognizerD
         }
     }
 
-    /// Only claim a drag that starts on a bubble; elsewhere the page should pan.
+    /// A sweep should be able to start on empty page and cross into the bubbles, so
+    /// at rest the whole surface selects — the page already fits, so there is
+    /// nothing to scroll. Once zoomed in the page does need to pan, and there a
+    /// drag has to start on a bubble to mean selection.
     override func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
         guard gesture is UIPanGestureRecognizer else { return true }
+        guard scrollView.zoomScale > scrollView.minimumZoomScale else { return true }
         let point = gesture.location(in: overlay)
         return regions.indices.contains { frame(for: $0).contains(point) }
     }
