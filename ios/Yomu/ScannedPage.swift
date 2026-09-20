@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 /// One text region on the page: what it says, and where it sits as a fraction of
 /// the image, so the overlay can place a tap target over it at any zoom.
@@ -44,7 +45,7 @@ enum VisionResponse {
             .flatMap { $0.blocks ?? [] }
             .flatMap { $0.paragraphs ?? [] }
 
-        var regions: [TextRegion] = []
+        var boxes: [(text: String, rect: CGRect)] = []
         for paragraph in paragraphs {
             let text = (paragraph.words ?? [])
                 .flatMap { $0.symbols ?? [] }
@@ -56,48 +57,67 @@ enum VisionResponse {
 
             let xs = vertices.map { CGFloat($0.x ?? 0) }, ys = vertices.map { CGFloat($0.y ?? 0) }
             let minX = xs.min()!, maxX = xs.max()!, minY = ys.min()!, maxY = ys.max()!
-            guard maxX > minX, maxY > minY else { continue }
-
-            regions.append(TextRegion(
-                id: regions.count,
-                text: text,
-                rect: CGRect(x: minX / imageSize.width,
-                             y: minY / imageSize.height,
-                             width: (maxX - minX) / imageSize.width,
-                             height: (maxY - minY) / imageSize.height)))
+            guard maxX > minX, maxY > minY, isMeaningful(text) else { continue }
+            boxes.append((text, CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)))
         }
 
-        guard !regions.isEmpty else {
+        let kept = dropRuby(from: boxes).sorted { readingOrder($0.rect, $1.rect) }
+        guard !kept.isEmpty else {
             throw YomuError.message("No Japanese text was found on this page.")
         }
-        let full = payload.fullTextAnnotation?.text ?? regions.map(\.text).joined(separator: "\n")
+
+        let regions = kept.enumerated().map { index, box in
+            TextRegion(id: index, text: box.text,
+                       rect: CGRect(x: box.rect.minX / imageSize.width,
+                                    y: box.rect.minY / imageSize.height,
+                                    width: box.rect.width / imageSize.width,
+                                    height: box.rect.height / imageSize.height))
+        }
+        // Rebuild the page text in reading order too, so the explanation's context
+        // is not the raw Vision ordering.
+        let full = regions.map(\.text).joined(separator: "\n")
         return ScannedPage(regions: regions, fullText: full)
     }
-}
 
-/// A downscaled JPEG plus the size it was encoded at. Vision returns coordinates in
-/// the space of the image it was given, so boxes must be normalised against this
-/// size and not the original — otherwise every tap target lands in the wrong place.
-struct EncodedImage {
-    let base64: String
-    let size: CGSize
-}
-
-extension UIImage {
-    /// Vision does not need full sensor resolution, and the request body has to stay
-    /// well under the serverless limit.
-    func downscaledJPEG(maxDimension: CGFloat = 2048, quality: CGFloat = 0.85) -> EncodedImage? {
-        let longest = max(size.width, size.height)
-        let scale = longest > maxDimension ? maxDimension / longest : 1
-        let target = CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
-
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        format.opaque = true
-        let rendered = UIGraphicsImageRenderer(size: target, format: format).image { _ in
-            draw(in: CGRect(origin: .zero, size: target))
+    /// Artwork produces stray one- and two-character hits — a brush stroke read as
+    /// "C". Anything with kana or kanji is kept; a short Latin fragment is not.
+    private static func isMeaningful(_ text: String) -> Bool {
+        let japanese = text.unicodeScalars.contains {
+            (0x3040...0x30FF).contains($0.value) || (0x4E00...0x9FFF).contains($0.value)
         }
-        guard let data = rendered.jpegData(compressionQuality: quality) else { return nil }
-        return EncodedImage(base64: data.base64EncodedString(), size: target)
+        return japanese || text.count >= 3
+    }
+
+    /// Furigana are regions of their own, and Vision often emits them first, so a
+    /// merged selection would lead with ruby before the text it annotates. Ruby is
+    /// set far smaller than its base text and sits alongside the column it belongs
+    /// to — on a real page, 16pt wide against 52–65pt for the columns themselves.
+    private static func dropRuby(from boxes: [(text: String, rect: CGRect)]) -> [(text: String, rect: CGRect)] {
+        let vertical = boxes.filter { $0.rect.height > $0.rect.width }
+        guard vertical.count > 1 else { return boxes }
+
+        let widths = vertical.map(\.rect.width).sorted()
+        let median = widths[widths.count / 2]
+        guard median > 0 else { return boxes }
+
+        return boxes.filter { box in
+            guard box.rect.height > box.rect.width else { return true }   // horizontal text
+            guard box.rect.width < median * 0.55 else { return true }     // full-size column
+            // Only drop it if it actually annotates a neighbouring column.
+            return !boxes.contains { other in
+                other.rect != box.rect
+                    && other.rect.width > box.rect.width * 1.6
+                    && abs(other.rect.midX - box.rect.midX) < (other.rect.width + box.rect.width) * 1.5
+                    && other.rect.minY < box.rect.maxY && box.rect.minY < other.rect.maxY
+            }
+        }
+    }
+
+    /// Japanese reads right to left by column, then top to bottom. Columns whose
+    /// horizontal spans overlap belong to the same column and order vertically.
+    private static func readingOrder(_ a: CGRect, _ b: CGRect) -> Bool {
+        if a.minX > b.maxX { return true }
+        if b.minX > a.maxX { return false }
+        return a.minY < b.minY
     }
 }
