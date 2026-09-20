@@ -46,7 +46,8 @@ private struct CameraScreen: View {
 
             switch camera.status {
             case .running:
-                CameraPreview(session: camera.session).ignoresSafeArea()
+                CameraPreview(session: camera.session) { camera.focus(at: $0) }
+                    .ignoresSafeArea()
             case .denied:
                 message("Yomu needs camera access to read your page. Enable it in Settings → Yomu.")
             case .failed(let text):

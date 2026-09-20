@@ -70,6 +70,16 @@ final class CameraController: NSObject, ObservableObject {
         session.addOutput(output)
         output.maxPhotoQualityPrioritization = .quality
 
+        // When whatever the reader focused on leaves the frame, go back to
+        // following the page rather than staying locked on a stale point.
+        NotificationCenter.default.addObserver(
+            forName: .AVCaptureDeviceSubjectAreaDidChange,
+            object: device,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.resumeContinuousFocus() }
+        }
+
         // Manga pages are flat and close; keep autofocus biased to near subjects.
         if let _ = try? device.lockForConfiguration() {
             if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
@@ -78,6 +88,39 @@ final class CameraController: NSObject, ObservableObject {
             device.unlockForConfiguration()
         }
         return true
+    }
+
+    /// Focus and meter on a point the reader tapped. `point` is in device space
+    /// (0–1, from the preview layer's conversion), not view coordinates.
+    func focus(at point: CGPoint) {
+        guard let device = (session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first)?.device,
+              (try? device.lockForConfiguration()) != nil else { return }
+        defer { device.unlockForConfiguration() }
+
+        if device.isFocusPointOfInterestSupported {
+            device.focusPointOfInterest = point
+            if device.isFocusModeSupported(.autoFocus) { device.focusMode = .autoFocus }
+        }
+        if device.isExposurePointOfInterestSupported {
+            device.exposurePointOfInterest = point
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+        }
+        // Go back to tracking the page once the tapped point is sharp.
+        device.isSubjectAreaChangeMonitoringEnabled = true
+    }
+
+    /// After the tapped subject moves out of frame, resume following the page.
+    func resumeContinuousFocus() {
+        guard let device = (session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first)?.device,
+              (try? device.lockForConfiguration()) != nil else { return }
+        defer { device.unlockForConfiguration() }
+        if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+        if device.isExposureModeSupported(.continuousAutoExposure) {
+            device.exposureMode = .continuousAutoExposure
+        }
+        device.isSubjectAreaChangeMonitoringEnabled = false
     }
 
     func capture() async throws -> UIImage {
