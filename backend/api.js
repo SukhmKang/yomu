@@ -24,7 +24,7 @@ const explanationPlain = explanationBase + `説明の本文だけを書き、ラ
 
 const SESSION_AGE = 90 * 24 * 60 * 60;
 const READ_ONLY = ["/api/status", "/api/session"];
-const PROTECTED = ["/api/vision", "/api/explain", "/api/explain/stream"];
+const PROTECTED = ["/api/vision", "/api/explain", "/api/explain-stream"];
 
 export function createApi({ env = process.env, fetchImpl = fetch } = {}) {
   let attempts = 0, attemptWindow = 0;
@@ -260,7 +260,7 @@ export function createApi({ env = process.env, fetchImpl = fetch } = {}) {
         body: { authenticated: false },
       };
 
-    if (pathname === "/api/explain/stream") {
+    if (pathname === "/api/explain-stream") {
       validateExplain(data);
       return { status: 200, stream: aiStream(data) };
     }

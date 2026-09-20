@@ -62,7 +62,7 @@ final class Backend: ObservableObject {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let request = try request("/api/explain/stream",
+                    let request = try request("/api/explain-stream",
                                               body: explainBody(text: text, context: context, level: level))
                     let (bytes, response) = try await session.bytes(for: request)
                     let status = (response as? HTTPURLResponse)?.statusCode ?? 0

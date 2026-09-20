@@ -122,7 +122,7 @@ Credentials**. Restrict the key to **Cloud Vision API**.
 
 For OpenAI: create a project API key with access to `gpt-5.6-luna`. The model is
 configurable via `OPENAI_MODEL`. The API uses the Responses API with `store: false`,
-structured output for `/api/explain` and streaming for `/api/explain/stream`.
+structured output for `/api/explain` and streaming for `/api/explain-stream`.
 
 ## Structure
 
