@@ -22,6 +22,10 @@ const explanationBase = `あなたは日本語の読解を助ける先生です�
 const explanation = explanationBase + `simpleJapanese に説明を入れてください。`;
 const explanationPlain = explanationBase + `説明の本文だけを書き、ラベルや見出しは付けないでください。`;
 
+/// Chosen in the app's Preferences. Allow-listed rather than passed through, so a
+/// client cannot name an arbitrary — or far more expensive — model.
+const MODELS = ["gpt-5.6-luna", "gpt-5.6-terra"];
+
 const SESSION_AGE = 90 * 24 * 60 * 60;
 const READ_ONLY = ["/api/status", "/api/session"];
 const PROTECTED = ["/api/vision", "/api/explain", "/api/explain-stream"];
@@ -81,14 +85,16 @@ export function createApi({ env = process.env, fetchImpl = fetch } = {}) {
     return env[name];
   }
 
+  const quoted = ({ text, context, level }) => ({ text, context, level });
+
   function explainRequest(data, { stream = false } = {}) {
     const body = {
-      model: env.OPENAI_MODEL || "gpt-5.6-luna",
+      model: MODELS.includes(data.model) ? data.model : (env.OPENAI_MODEL || MODELS[0]),
       store: false,
       reasoning: { effort: "low" },
       max_output_tokens: 4000,
       instructions: stream ? explanationPlain : explanation,
-      input: [{ role: "user", content: JSON.stringify(data) }],
+      input: [{ role: "user", content: JSON.stringify(quoted(data)) }],
     };
     if (stream) return { ...body, stream: true };
     return {
@@ -113,6 +119,7 @@ export function createApi({ env = process.env, fetchImpl = fetch } = {}) {
     check(string(data.text), "Select or enter Japanese text (up to 6,000 characters).");
     check(typeof data.context === "string" && data.context.length <= 6000, "Context is too long.");
     check(["N5", "N4", "N3", "N2", "N1"].includes(data.level), "Choose a valid learner level.");
+    check(data.model === undefined || MODELS.includes(data.model), "Choose a valid model.");
   }
 
   async function ai(data) {

@@ -187,3 +187,23 @@ test("the iOS app authenticates with a bearer token instead of a lock screen", a
   assert.equal((await bearer("wrong-token")).status, 401);
   assert.equal((await bearer("")).status, 401);
 });
+
+test("the explanation model is chosen from an allow-list, never passed through", async (t) => {
+  let request;
+  const base = await server(t, {
+    env: { OPENAI_API_KEY: "private-key" },
+    fetchImpl: async (url, options) => {
+      request = { url, ...options };
+      return Response.json({
+        output: [{ content: [{ type: "output_text", text: JSON.stringify(explanation) }] }],
+      });
+    },
+  });
+  await post(base + "/api/explain", { ...input, model: "gpt-5.6-terra" });
+  assert.equal(JSON.parse(request.body).model, "gpt-5.6-terra");
+  // An unknown or costly model name is rejected rather than forwarded.
+  assert.equal((await post(base + "/api/explain", { ...input, model: "gpt-9-ultra" })).status, 400);
+  // The model is request metadata, not part of the quoted material.
+  await post(base + "/api/explain", { ...input, model: "gpt-5.6-luna" });
+  assert.deepEqual(JSON.parse(JSON.parse(request.body).input[0].content), input);
+});

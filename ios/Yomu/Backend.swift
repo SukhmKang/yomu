@@ -65,7 +65,10 @@ final class Backend: ObservableObject {
     }
 
     private func explainBody(text: String, context: String, level: String) -> [String: Any] {
-        ["text": text, "context": String(context.prefix(6000)), "level": level]
+        let model = UserDefaults.standard.string(forKey: "yomu.model")
+            ?? ExplanationModel.default.rawValue
+        return ["text": text, "context": String(context.prefix(6000)),
+                "level": level, "model": model]
     }
 
     private func describe(_ status: Int, action: String = "explain") -> String? {

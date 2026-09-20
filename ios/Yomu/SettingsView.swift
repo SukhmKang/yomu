@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject private var backend: Backend
     @Environment(\.dismiss) private var dismiss
     @AppStorage("yomu.level") private var level: String = "N2"
+    @AppStorage("yomu.model") private var model: String = ExplanationModel.default.rawValue
     @State private var origin: String = ""
 
     private let levels = [
@@ -22,6 +23,20 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.inline)
                     .labelsHidden()
+                }
+
+                Section {
+                    Picker("Model", selection: $model) {
+                        ForEach(ExplanationModel.allCases) { option in
+                            Text(option.title).tag(option.rawValue)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } header: {
+                    Text("Explanation model")
+                } footer: {
+                    Text(ExplanationModel(rawValue: model)?.detail ?? "")
                 }
 
                 Section {
