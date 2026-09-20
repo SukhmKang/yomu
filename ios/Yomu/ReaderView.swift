@@ -25,6 +25,8 @@ struct ReaderView: View {
 
     private var topBar: some View {
         HStack {
+            status
+            Spacer()
             Button(action: onNextPage) {
                 Label("Next page", systemImage: "camera.fill")
                     .font(.subheadline.weight(.semibold))
@@ -32,8 +34,6 @@ struct ReaderView: View {
                     .padding(.vertical, 9)
                     .background(.ultraThinMaterial, in: Capsule())
             }
-            Spacer()
-            status
         }
         .padding(.horizontal, 16)
         .tint(.white)
