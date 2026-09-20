@@ -10,12 +10,11 @@
     "start": "node --env-file-if-exists=.env backend/server.js",
     "dev": "node --env-file-if-exists=.env --watch backend/server.js",
     "test": "node --test tests/*.test.js",
-    "configure:vercel": "node scripts/configure-vercel.js",
     "build": "node scripts/build-dict.js",
     "prestart": "npm run build",
     "predev": "npm run build",
     "test:ui": "playwright test",
-    "start:backend": "node --env-file-if-exists=.env backend/server.js"
+    "build:ios-dict": "node scripts/build-ios-dict.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

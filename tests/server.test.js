@@ -173,3 +173,17 @@ test("password protects paid APIs and persistent signed sessions reject tamperin
   for (let i = 0; i < 10; i++) await post(base + "/api/login", {password: "wrong"});
   assert.equal((await post(base + "/api/login", {password: "wrong"})).status, 429);
 });
+
+test("the iOS app authenticates with a bearer token instead of a lock screen", async (t) => {
+  const base = await server(t, { env: { OPENAI_API_KEY: "private-key" } });
+  const bearer = (token) =>
+    fetch(base + "/api/explain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(input),
+    });
+  // No cookie at all, only the token: accepted, and reaches the provider.
+  assert.equal((await bearer("test-password")).status, 502);
+  assert.equal((await bearer("wrong-token")).status, 401);
+  assert.equal((await bearer("")).status, 401);
+});

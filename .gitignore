@@ -19,3 +19,9 @@ test-results/
 frontend/dict/entries/
 .vercel
 .env*
+
+ios/Yomu/Resources/jmdict.sqlite
+ios/build/
+ios/Yomu.xcodeproj/
+ios/Secrets.xcconfig
+ios/Yomu/Info.plist

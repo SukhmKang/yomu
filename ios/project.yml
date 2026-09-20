@@ -1,0 +1,38 @@
+name: Yomu
+options:
+  bundleIdPrefix: com.sukhmkang
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Yomu:
+    type: application
+    platform: iOS
+    sources:
+      - Yomu
+    dependencies:
+      - sdk: libsqlite3.tbd
+    configFiles:
+      Debug: Secrets.xcconfig
+      Release: Secrets.xcconfig
+    info:
+      path: Yomu/Info.plist
+      properties:
+        CFBundleDisplayName: 読む
+        YomuAPIToken: $(YOMU_API_TOKEN)
+        UILaunchScreen: {}
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UIViewControllerBasedStatusBarAppearance: false
+        NSCameraUsageDescription: Yomu uses the camera to photograph the page you are reading.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sukhmkang.yomu
+        TARGETED_DEVICE_FAMILY: "1"
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
