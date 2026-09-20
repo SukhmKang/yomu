@@ -12,12 +12,16 @@ struct ReaderView: View {
             PageView(image: model.image,
                      regions: model.regions,
                      selected: model.selected,
+                     bottomInset: model.selection.isEmpty ? 0 : UnderstandPanel.openHeight,
                      onSelect: model.select)
                 .ignoresSafeArea(edges: .horizontal)
 
             topBar
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // Overlaid rather than inset: insetting shrank the page when the panel
+        // opened, which re-fitted the image and slid every tap target out from
+        // under the finger, so the next tap landed on the wrong bubble.
+        .overlay(alignment: .bottom) {
             UnderstandPanel(model: model)
         }
         .task { await model.scan() }
@@ -60,6 +64,8 @@ struct ReaderView: View {
 /// Bottom panel: the selection, its vocabulary, and its explanation. No buttons to
 /// press — selecting text on the page fills all three.
 private struct UnderstandPanel: View {
+    static let openHeight: CGFloat = 320
+
     @ObservedObject var model: ReaderModel
 
     var body: some View {
@@ -85,7 +91,7 @@ private struct UnderstandPanel: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: model.selection.isEmpty ? 64 : 320)
+        .frame(height: model.selection.isEmpty ? 64 : Self.openHeight)
         .background(.regularMaterial)
         .animation(.snappy(duration: 0.28), value: model.selection.isEmpty)
     }

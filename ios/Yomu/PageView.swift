@@ -11,6 +11,9 @@ struct PageView: UIViewRepresentable {
     let image: UIImage
     let regions: [TextRegion]
     let selected: Set<Int>
+    /// How much of the bottom is covered by the panel. Added as scroll inset rather
+    /// than taken out of the layout, so the image keeps its size and position.
+    let bottomInset: CGFloat
     let onSelect: (Set<Int>) -> Void
 
     func makeUIView(context: Context) -> ZoomablePageView {
@@ -18,6 +21,7 @@ struct PageView: UIViewRepresentable {
         view.setImage(image)
         view.onSelect = onSelect
         view.setRegions(regions, selected: selected)
+        view.bottomInset = bottomInset
         return view
     }
 
@@ -25,6 +29,7 @@ struct PageView: UIViewRepresentable {
         view.onSelect = onSelect
         if view.imageView.image !== image { view.setImage(image) }
         view.setRegions(regions, selected: selected)
+        view.bottomInset = bottomInset
     }
 }
 
@@ -32,6 +37,12 @@ final class ZoomablePageView: UIView, UIScrollViewDelegate, UIGestureRecognizerD
     let scrollView = UIScrollView()
     let imageView = UIImageView()
     var onSelect: ((Set<Int>) -> Void)?
+
+    /// Extra room to scroll so bubbles behind the panel stay reachable. It never
+    /// changes the image's size or centring, so tap targets do not move.
+    var bottomInset: CGFloat = 0 {
+        didSet { guard bottomInset != oldValue else { return }; centerImage() }
+    }
 
     private let overlay = UIView()
     private var regions: [TextRegion] = []
@@ -106,7 +117,7 @@ final class ZoomablePageView: UIView, UIScrollViewDelegate, UIGestureRecognizerD
     private func centerImage() {
         let x = max(0, (scrollView.bounds.width - scrollView.contentSize.width) / 2)
         let y = max(0, (scrollView.bounds.height - scrollView.contentSize.height) / 2)
-        scrollView.contentInset = UIEdgeInsets(top: y, left: x, bottom: y, right: x)
+        scrollView.contentInset = UIEdgeInsets(top: y, left: x, bottom: y + bottomInset, right: x)
     }
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }

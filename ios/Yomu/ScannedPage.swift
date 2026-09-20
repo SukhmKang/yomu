@@ -61,7 +61,7 @@ enum VisionResponse {
             boxes.append((text, CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)))
         }
 
-        let kept = dropRuby(from: boxes).sorted { readingOrder($0.rect, $1.rect) }
+        let kept = inReadingOrder(dropRuby(from: boxes))
         guard !kept.isEmpty else {
             throw YomuError.message("No Japanese text was found on this page.")
         }
@@ -115,11 +115,31 @@ enum VisionResponse {
         }
     }
 
-    /// Japanese reads right to left by column, then top to bottom. Columns whose
-    /// horizontal spans overlap belong to the same column and order vertically.
-    private static func readingOrder(_ a: CGRect, _ b: CGRect) -> Bool {
-        if a.minX > b.maxX { return true }
-        if b.minX > a.maxX { return false }
-        return a.minY < b.minY
+    /// Order the page the way it is read.
+    ///
+    /// Sorting the whole page right to left is wrong, because a page is rows of
+    /// panels: on one real page it put 野武士だろうと first, from the bottom panel,
+    /// purely because that bubble sat furthest right — so the dialogue reached the
+    /// explanation out of sequence. Regions are banded into rows by vertical
+    /// overlap, rows run top to bottom, and within a row it is right to left.
+    ///
+    /// A panel tall enough to span several rows will merge them back into one band,
+    /// which is no worse than sorting globally.
+    private static func inReadingOrder(
+        _ boxes: [(text: String, rect: CGRect)]
+    ) -> [(text: String, rect: CGRect)] {
+        var bands: [[(text: String, rect: CGRect)]] = []
+        var bandBottom: CGFloat = -.greatestFiniteMagnitude
+
+        for box in boxes.sorted(by: { $0.rect.minY < $1.rect.minY }) {
+            if !bands.isEmpty, box.rect.minY < bandBottom {
+                bands[bands.count - 1].append(box)
+                bandBottom = max(bandBottom, box.rect.maxY)
+            } else {
+                bands.append([box])
+                bandBottom = box.rect.maxY
+            }
+        }
+        return bands.flatMap { $0.sorted { $0.rect.midX > $1.rect.midX } }
     }
 }
