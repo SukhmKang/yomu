@@ -79,10 +79,12 @@ private struct UnderstandPanel: View {
                 hint
             } else {
                 ScrollView {
+                    // Explanation first: the word list can run long on a swept
+                    // selection, and it should not push やさしく説明 off-screen.
                     VStack(alignment: .leading, spacing: 16) {
                         selectedText
-                        if !model.vocabulary.isEmpty { vocabulary }
                         explanation
+                        if !model.vocabulary.isEmpty { vocabulary }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)

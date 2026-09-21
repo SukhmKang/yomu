@@ -82,12 +82,9 @@ actor JapaneseDictionary {
             return nil
         }
 
-        var results: [VocabularyEntry] = []
-        for entry in found where seen.insert(entry.word + entry.reading).inserted {
-            results.append(entry)
-            if results.count == 20 { break }
-        }
-        return results
+        // Every word, not the first twenty: a swept selection used to stop silently
+        // part way, so the end of what you picked had no vocabulary at all.
+        return found.filter { seen.insert($0.word + $0.reading).inserted }
     }
 
     /// `matched` is the dictionary form that actually hit, which is the honest
