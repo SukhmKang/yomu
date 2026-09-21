@@ -22,16 +22,33 @@ actor JapaneseDictionary {
     static let shared = JapaneseDictionary()
 
     private let databasePath: String?
+    private let transformer: LanguageTransformer?
     private var db: OpaquePointer?
     private var opened = false
 
-    init(databasePath: String? = Bundle.main.path(forResource: "jmdict", ofType: "sqlite")) {
+    init(databasePath: String? = Bundle.main.path(forResource: "jmdict", ofType: "sqlite"),
+         transformer: LanguageTransformer? = LanguageTransformer.japanese) {
         self.databasePath = databasePath
+        self.transformer = transformer
+    }
+
+    /// Every form a surface could be an inflection of, the surface itself first so
+    /// a word that is already a headword is not de-inflected past its own entry.
+    private func candidates(for surface: String) -> [String] {
+        var seen = Set<String>()
+        var forms = [surface]
+        seen.insert(surface)
+        for candidate in transformer?.transform(surface) ?? [] where seen.insert(candidate.text).inserted {
+            forms.append(candidate.text)
+        }
+        return forms
     }
 
     /// Grammar, not vocabulary — showing a gloss for these is noise.
+    /// Exactly as spelled in the built dictionary — "auxiliary verb" and "copula"
+    /// were guessed and match nothing, so this filter silently passed everything.
     private static let skippedPartsOfSpeech: Set<String> = [
-        "particle", "auxiliary verb", "copula", "conjunction", "interjection",
+        "particle", "aux verb", "conjunction", "interjection",
     ]
 
     /// Words that segment out of inflections and only ever mislead as glosses.
@@ -53,8 +70,8 @@ actor JapaneseDictionary {
         guard db != nil else { return [] }
 
         var seen = Set<String>()
-        let found = JapaneseSegmenter.segment(text) { surface, forms -> VocabularyEntry? in
-            for form in forms {
+        let found = JapaneseSegmenter.segment(text) { surface -> VocabularyEntry? in
+            for form in candidates(for: surface) {
                 guard let row = lookup(form), isWorthShowing(row, matched: form) else { continue }
                 return VocabularyEntry(surface: surface,
                                        word: row.word,
