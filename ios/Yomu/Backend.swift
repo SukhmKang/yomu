@@ -17,6 +17,10 @@ final class Backend: ObservableObject {
     private static let originKey = "yomu.origin"
     private static let defaultOrigin = "https://yomu-omega.vercel.app"
 
+    /// The scan currently being read, so selections and explanations are filed
+    /// with the page they came from.
+    private(set) var lastScan: String?
+
     /// Injected at build time from `Secrets.xcconfig`, which is not in git.
     private let token = (Bundle.main.object(forInfoDictionaryKey: "YomuAPIToken") as? String) ?? ""
 
@@ -59,7 +63,7 @@ final class Backend: ObservableObject {
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if let problem = describe(status, action: "read") { throw YomuError.message(problem) }
-        ScanArchive.save(image: encoded, response: data)
+        lastScan = ScanArchive.save(image: encoded, response: data)
         // Normalise against the size actually sent, not the original.
         return try VisionResponse.parse(data, imageSize: encoded.size)
     }

@@ -51,8 +51,12 @@ final class ReaderModel: ObservableObject {
         scanError = nil
         do {
             page = try await backend.scan(image: image)
+            ScanArchive.log(scan: backend.lastScan, event: "scanned",
+                            detail: ["regions": (page?.regions ?? []).map(\.text).joined(separator: " / ")])
         } catch {
             scanError = error.localizedDescription
+            ScanArchive.log(scan: backend.lastScan, event: "scan-failed",
+                            detail: ["error": error.localizedDescription])
         }
         isScanning = false
     }
@@ -77,6 +81,10 @@ final class ReaderModel: ObservableObject {
             vocabulary = []
             return
         }
+
+        ScanArchive.log(scan: backend.lastScan, event: "select",
+                        detail: ["regions": indices.sorted().map(String.init).joined(separator: ","),
+                                 "text": trimmed])
 
         explanation = .loading
         explainTask = Task { [weak self] in
@@ -123,9 +131,13 @@ final class ReaderModel: ObservableObject {
             }
             cache[cacheKey(text)] = accumulated
             explanation = .ready(accumulated)
+            ScanArchive.log(scan: backend.lastScan, event: "explained",
+                            detail: ["text": text, "level": level, "result": accumulated])
         } catch {
             guard !Task.isCancelled, selection == text else { return }
             explanation = .failed(error.localizedDescription)
+            ScanArchive.log(scan: backend.lastScan, event: "explain-failed",
+                            detail: ["text": text, "error": error.localizedDescription])
         }
     }
 
