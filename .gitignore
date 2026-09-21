@@ -25,3 +25,4 @@ ios/build/
 ios/Yomu.xcodeproj/
 ios/Secrets.xcconfig
 ios/Yomu/Info.plist
+data/jitendex-scores.json

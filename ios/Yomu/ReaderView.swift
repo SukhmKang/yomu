@@ -123,10 +123,20 @@ private struct UnderstandPanel: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    Text(entry.meaning)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.meaning)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                        // Shown when the dictionary cannot separate two readings of
+                        // equal standing, rather than picking one and hiding it.
+                        ForEach(entry.alternatives, id: \.self) { alternative in
+                            Text(alternative)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                    }
                 }
             }
         }
