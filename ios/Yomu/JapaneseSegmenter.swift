@@ -1,38 +1,66 @@
 import Foundation
+import NaturalLanguage
 
 /// Splits Japanese text into dictionary words.
 ///
-/// NLTagger cannot help here: for Japanese it reports every token as `OtherWord`
-/// and returns an empty lemma, so it offers neither part of speech nor a dictionary
-/// form. This walks the text taking the longest match at each position; undoing
-/// inflections is `LanguageTransformer`'s job.
+/// Matching runs between token boundaries from `NLTokenizer`, longest first.
+/// Without that barrier, longest-match mines words out of the middle of anything
+/// the dictionary does not contain — ハンブルク (Hamburg, absent) yielded ブル
+/// "bull". Apple's tokenizer keeps such runs whole, and its boundaries are
+/// morphological: くぐり抜け|て, なら|なかっ|た, 三十|七|歳.
+///
+/// It is used only for boundaries. `NLTagger` labels every Japanese token
+/// `OtherWord` with an empty lemma, so part of speech and dictionary form come
+/// from the dictionary and `LanguageTransformer` instead.
 enum JapaneseSegmenter {
     /// Longest word we will try to match at one position.
     private static let maxWindow = 10
 
-    /// Walk the text left to right, taking the longest match at each position.
+    /// Walk the text left to right, taking the longest match at each token start.
     /// `resolve` returns nil when a candidate is not a word worth showing.
     static func segment<T>(_ text: String, resolve: (_ surface: String) -> T?) -> [T] {
         let characters = Array(text)
+        let boundaries = tokenBoundaries(in: text, count: characters.count)
         var results: [T] = []
-        var i = 0
-        while i < characters.count {
-            guard isJapanese(characters[i]) else { i += 1; continue }
+        var start = 0
+
+        while start < characters.count {
+            // Only start on a boundary, so nothing is taken out of a word's middle.
+            guard boundaries.contains(start), isJapanese(characters[start]) else {
+                start += 1
+                continue
+            }
             var matched = false
-            let limit = min(maxWindow, characters.count - i)
+            let limit = min(maxWindow, characters.count - start)
             for length in stride(from: limit, through: 1, by: -1) {
-                let surface = String(characters[i..<(i + length)])
+                // …and end on one, so a match cannot run into the next word.
+                guard boundaries.contains(start + length) else { continue }
+                let surface = String(characters[start..<(start + length)])
                 guard surface.allSatisfy(isJapanese) else { continue }
                 if let value = resolve(surface) {
                     results.append(value)
-                    i += length
+                    start += length
                     matched = true
                     break
                 }
             }
-            if !matched { i += 1 }
+            if !matched { start += 1 }
         }
         return results
+    }
+
+    /// Character offsets where a token begins or ends, including both extremes.
+    private static func tokenBoundaries(in text: String, count: Int) -> Set<Int> {
+        var boundaries: Set<Int> = [0, count]
+        let tokenizer = NLTokenizer(unit: .word)
+        tokenizer.string = text
+        tokenizer.setLanguage(.japanese)
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+            boundaries.insert(text.distance(from: text.startIndex, to: range.lowerBound))
+            boundaries.insert(text.distance(from: text.startIndex, to: range.upperBound))
+            return true
+        }
+        return boundaries
     }
 
     static func isJapanese(_ c: Character) -> Bool {
