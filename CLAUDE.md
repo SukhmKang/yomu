@@ -24,11 +24,15 @@ but exposes no geometry, so there is nothing to draw a tap target on — and tap
 bubble is the whole interaction. Vision returns per-symbol boxes, which is what the
 overlay needs.
 
-Vision's own paragraph grouping is framing-dependent: the same cover photographed
-close gave four clean vertical columns, and photographed smaller in frame gave
-horizontal strips reading straight across them. Treat that as unsettled, and do not
-tune segmentation constants against a screenshot — the app archives the exact JPEG
-it uploads and the exact response to its Documents directory for this reason.
+Do not group Vision's output by hand. Its paragraph boxes are unreliable — on one
+cover they came back as horizontal strips across four vertical columns, and on a
+novel page six columns were merged into one block with the text out of order — but
+every symbol carries a `detectedBreak`, and that line segmentation is correct in
+both cases. Read the markers. An earlier attempt to cluster the boxes instead
+needed hand-tuned constants and fit the sample it was written against.
+
+The app archives the exact JPEG it uploads and the exact response to its Documents
+directory; debug segmentation against those, never against a screenshot.
 
 `NLTagger` is useless for Japanese: every token comes back as `OtherWord` with an
 empty lemma. Word segmentation and de-inflection live in `JapaneseSegmenter`.

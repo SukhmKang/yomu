@@ -1,4 +1,5 @@
 import CoreGraphics
+
 import Foundation
 
 /// One text region on the page: what it says, and where it sits as a fraction of
@@ -23,60 +24,95 @@ struct ScannedPage: Equatable {
 enum VisionResponse {
     struct Payload: Decodable {
         let fullTextAnnotation: FullText?
-        struct FullText: Decodable {
-            let text: String?
-            let pages: [Page]?
-        }
+        struct FullText: Decodable { let pages: [Page]? }
         struct Page: Decodable { let blocks: [Block]? }
         struct Block: Decodable { let paragraphs: [Paragraph]? }
-        struct Paragraph: Decodable {
-            let words: [Word]?
-            let boundingBox: Poly?
-        }
+        struct Paragraph: Decodable { let words: [Word]? }
         struct Word: Decodable { let symbols: [Symbol]? }
-        struct Symbol: Decodable { let text: String? }
+        struct Symbol: Decodable {
+            let text: String?
+            let boundingBox: Poly?
+            let property: Property?
+            struct Property: Decodable { let detectedBreak: Break? }
+            struct Break: Decodable { let type: String? }
+        }
         struct Poly: Decodable { let vertices: [Vertex]? }
         struct Vertex: Decodable { let x: Int?; let y: Int? }
     }
 
+    private struct Glyph { let text: String; let rect: CGRect; let endsLine: Bool }
+    private struct Line { let text: String; let rect: CGRect; let isVertical: Bool }
+
     static func parse(_ data: Data, imageSize: CGSize) throws -> ScannedPage {
         let payload = try JSONDecoder().decode(Payload.self, from: data)
-        let paragraphs = (payload.fullTextAnnotation?.pages ?? [])
-            .flatMap { $0.blocks ?? [] }
-            .flatMap { $0.paragraphs ?? [] }
-
-        var boxes: [(text: String, rect: CGRect)] = []
-        for paragraph in paragraphs {
-            let text = (paragraph.words ?? [])
-                .flatMap { $0.symbols ?? [] }
-                .compactMap(\.text)
-                .joined()
-            guard !text.isEmpty,
-                  let vertices = paragraph.boundingBox?.vertices, vertices.count >= 3,
-                  imageSize.width > 0, imageSize.height > 0 else { continue }
-
-            let xs = vertices.map { CGFloat($0.x ?? 0) }, ys = vertices.map { CGFloat($0.y ?? 0) }
-            let minX = xs.min()!, maxX = xs.max()!, minY = ys.min()!, maxY = ys.max()!
-            guard maxX > minX, maxY > minY, isMeaningful(text) else { continue }
-            boxes.append((text, CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)))
+        guard imageSize.width > 0, imageSize.height > 0 else {
+            throw YomuError.message("That photo could not be read.")
         }
 
-        let kept = inReadingOrder(dropRuby(from: boxes))
+        let glyphs = (payload.fullTextAnnotation?.pages ?? [])
+            .flatMap { $0.blocks ?? [] }
+            .flatMap { $0.paragraphs ?? [] }
+            .flatMap { $0.words ?? [] }
+            .flatMap { $0.symbols ?? [] }
+            .compactMap(glyph)
+
+        let lines = buildLines(glyphs).filter { isMeaningful($0.text) }
+        let kept = inReadingOrder(dropRuby(from: lines))
         guard !kept.isEmpty else {
             throw YomuError.message("No Japanese text was found on this page.")
         }
 
-        let regions = kept.enumerated().map { index, box in
-            TextRegion(id: index, text: box.text,
-                       rect: CGRect(x: box.rect.minX / imageSize.width,
-                                    y: box.rect.minY / imageSize.height,
-                                    width: box.rect.width / imageSize.width,
-                                    height: box.rect.height / imageSize.height))
+        let regions = kept.enumerated().map { index, line in
+            TextRegion(id: index, text: line.text,
+                       rect: CGRect(x: line.rect.minX / imageSize.width,
+                                    y: line.rect.minY / imageSize.height,
+                                    width: line.rect.width / imageSize.width,
+                                    height: line.rect.height / imageSize.height))
         }
-        // Rebuild the page text in reading order too, so the explanation's context
-        // is not the raw Vision ordering.
-        let full = regions.map(\.text).joined(separator: "\n")
-        return ScannedPage(regions: regions, fullText: full)
+        return ScannedPage(regions: regions,
+                           fullText: regions.map(\.text).joined(separator: "\n"))
+    }
+
+    private static func glyph(_ symbol: Payload.Symbol) -> Glyph? {
+        guard let text = symbol.text, !text.isEmpty,
+              let vertices = symbol.boundingBox?.vertices, vertices.count >= 3 else { return nil }
+        let xs = vertices.map { CGFloat($0.x ?? 0) }, ys = vertices.map { CGFloat($0.y ?? 0) }
+        let minX = xs.min()!, maxX = xs.max()!, minY = ys.min()!, maxY = ys.max()!
+        guard maxX > minX, maxY > minY else { return nil }
+        // SPACE continues the line; LINE_BREAK and EOL_SURE_SPACE end it.
+        let ends = ["LINE_BREAK", "EOL_SURE_SPACE"].contains(symbol.property?.detectedBreak?.type ?? "")
+        return Glyph(text: text,
+                     rect: CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY),
+                     endsLine: ends)
+    }
+
+    /// Group glyphs into lines using Vision's own line breaks.
+    ///
+    /// Vision marks the end of every line on the symbol itself, and that
+    /// segmentation is right even where its paragraph grouping is wrong: on this
+    /// novel page it merged six columns into one block, yet still marked all
+    /// thirteen line ends correctly. Reading the markers is its answer to the
+    /// problem; clustering the boxes here would be guessing at it.
+    private static func buildLines(_ glyphs: [Glyph]) -> [Line] {
+        var lines: [Line] = []
+        var text = ""
+        var rect: CGRect?
+
+        for glyph in glyphs {
+            text += glyph.text
+            rect = rect.map { $0.union(glyph.rect) } ?? glyph.rect
+            guard glyph.endsLine else { continue }
+            if let bounds = rect, !text.isEmpty {
+                lines.append(Line(text: text, rect: bounds,
+                                  isVertical: bounds.height > bounds.width))
+            }
+            text = ""
+            rect = nil
+        }
+        if let bounds = rect, !text.isEmpty {
+            lines.append(Line(text: text, rect: bounds, isVertical: bounds.height > bounds.width))
+        }
+        return lines
     }
 
     /// A photographed page brings its surroundings with it. One scan picked up the
@@ -94,8 +130,8 @@ enum VisionResponse {
     /// merged selection would lead with ruby before the text it annotates. Ruby is
     /// set far smaller than its base text and sits alongside the column it belongs
     /// to — on a real page, 16pt wide against 52–65pt for the columns themselves.
-    private static func dropRuby(from boxes: [(text: String, rect: CGRect)]) -> [(text: String, rect: CGRect)] {
-        let vertical = boxes.filter { $0.rect.height > $0.rect.width }
+    private static func dropRuby(from boxes: [Line]) -> [Line] {
+        let vertical = boxes.filter(\.isVertical)
         guard vertical.count > 1 else { return boxes }
 
         let widths = vertical.map(\.rect.width).sorted()
@@ -103,11 +139,11 @@ enum VisionResponse {
         guard median > 0 else { return boxes }
 
         return boxes.filter { box in
-            guard box.rect.height > box.rect.width else { return true }   // horizontal text
+            guard box.isVertical else { return true }
             guard box.rect.width < median * 0.55 else { return true }     // full-size column
             // Only drop it if it actually annotates a neighbouring column.
             return !boxes.contains { other in
-                other.rect != box.rect
+                other.isVertical && other.rect != box.rect
                     && other.rect.width > box.rect.width * 1.6
                     && abs(other.rect.midX - box.rect.midX) < (other.rect.width + box.rect.width) * 1.5
                     && other.rect.minY < box.rect.maxY && box.rect.minY < other.rect.maxY
@@ -125,10 +161,8 @@ enum VisionResponse {
     ///
     /// A panel tall enough to span several rows will merge them back into one band,
     /// which is no worse than sorting globally.
-    private static func inReadingOrder(
-        _ boxes: [(text: String, rect: CGRect)]
-    ) -> [(text: String, rect: CGRect)] {
-        var bands: [[(text: String, rect: CGRect)]] = []
+    private static func inReadingOrder(_ boxes: [Line]) -> [Line] {
+        var bands: [[Line]] = []
         var bandBottom: CGFloat = -.greatestFiniteMagnitude
 
         for box in boxes.sorted(by: { $0.rect.minY < $1.rect.minY }) {
@@ -143,3 +177,5 @@ enum VisionResponse {
         return bands.flatMap { $0.sorted { $0.rect.midX > $1.rect.midX } }
     }
 }
+
+
