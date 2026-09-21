@@ -26,3 +26,25 @@ extension UIImage {
         return EncodedImage(base64: data.base64EncodedString(), size: target)
     }
 }
+
+extension UIImage {
+    /// Trim to the given width-to-height ratio about the centre, which is the part
+    /// an aspect-fill preview was showing.
+    func centreCropped(toAspectRatio aspect: CGFloat) -> UIImage {
+        guard aspect > 0, size.width > 0, size.height > 0 else { return self }
+        let current = size.width / size.height
+        guard abs(current - aspect) > 0.001 else { return self }
+
+        let target = current > aspect
+            ? CGSize(width: size.height * aspect, height: size.height)   // trim sides
+            : CGSize(width: size.width, height: size.width / aspect)     // trim top and bottom
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = scale
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            draw(at: CGPoint(x: (target.width - size.width) / 2,
+                             y: (target.height - size.height) / 2))
+        }
+    }
+}

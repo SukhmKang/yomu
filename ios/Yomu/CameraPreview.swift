@@ -6,17 +6,21 @@ struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
     /// Receives a point in device space (0–1) for focus and metering.
     let onFocus: (CGPoint) -> Void
+    /// Reports the viewfinder's shape so captures can be cropped to match it.
+    let onResize: (CGFloat) -> Void
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
         view.layer.session = session
         view.layer.videoGravity = .resizeAspectFill
         view.onFocus = onFocus
+        view.onResize = onResize
         return view
     }
 
     func updateUIView(_ view: PreviewView, context: Context) {
         view.onFocus = onFocus
+        view.onResize = onResize
         if view.layer.session !== session { view.layer.session = session }
     }
 
@@ -25,6 +29,7 @@ struct CameraPreview: UIViewRepresentable {
         override var layer: AVCaptureVideoPreviewLayer { super.layer as! AVCaptureVideoPreviewLayer }
 
         var onFocus: ((CGPoint) -> Void)?
+        var onResize: ((CGFloat) -> Void)?
         private let reticle = UIView()
 
         override init(frame: CGRect) {
@@ -41,6 +46,12 @@ struct CameraPreview: UIViewRepresentable {
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard bounds.height > 0 else { return }
+            onResize?(bounds.width / bounds.height)
+        }
 
         @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
             let point = gesture.location(in: self)

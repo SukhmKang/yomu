@@ -15,6 +15,12 @@ final class CameraController: NSObject, ObservableObject {
     @Published private(set) var status: Status = .idle
     @Published private(set) var isCapturing = false
 
+    /// The viewfinder's shape. The preview fills its bounds by cropping the sensor
+    /// image, so the photo covers more than was framed; captures are cropped back to
+    /// this so what you saw is what you get — and so the OCR is not handed the
+    /// surroundings you deliberately kept out of shot.
+    var previewAspectRatio: CGFloat?
+
     let session = AVCaptureSession()
     private let output = AVCapturePhotoOutput()
     private let queue = DispatchQueue(label: "yomu.camera")
@@ -133,10 +139,12 @@ final class CameraController: NSObject, ObservableObject {
         if let connection = output.connection(with: .video), connection.isVideoRotationAngleSupported(90) {
             connection.videoRotationAngle = 90  // portrait
         }
-        return try await withCheckedThrowingContinuation { continuation in
+        let captured: UIImage = try await withCheckedThrowingContinuation { continuation in
             pendingCapture = continuation
             output.capturePhoto(with: settings, delegate: self)
         }
+        guard let aspect = previewAspectRatio else { return captured }
+        return captured.centreCropped(toAspectRatio: aspect)
     }
 }
 
