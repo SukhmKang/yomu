@@ -174,7 +174,22 @@ enum VisionResponse {
                 bandBottom = box.rect.maxY
             }
         }
-        return bands.flatMap { $0.sorted { $0.rect.midX > $1.rect.midX } }
+        return bands.flatMap { $0.sorted(by: rightToLeft) }
+    }
+
+    /// Within a band, columns run right to left — but two pieces of the *same*
+    /// column run top to bottom. Comparing centres alone got that wrong: on a novel
+    /// page the full-height columns pull everything into one band, and 章 was placed
+    /// ahead of 第一 because it sat two pixels further right.
+    ///
+    /// Vision's own ordering cannot be used instead. It is correct for manga, where
+    /// it emits bubbles panel by panel, and reversed for the novel, where it runs
+    /// the columns left to right.
+    private static func rightToLeft(_ a: Line, _ b: Line) -> Bool {
+        if a.rect.minX > b.rect.maxX { return true }    // a is a column to the right
+        if b.rect.minX > a.rect.maxX { return false }
+        return a.rect.minY < b.rect.minY                // same column
+
     }
 }
 
