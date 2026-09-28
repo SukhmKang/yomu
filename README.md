@@ -30,9 +30,16 @@ there is no word-versus-passage mode: granularity is however far you drag. Chang
 the selection automatically fills in both the vocabulary and the explanation — there
 is no button to press.
 
-Word lookup is local. `scripts/build-ios-dict.mjs` turns `data/index.json` into a
-bundled 40 MB SQLite file; `JapaneseSegmenter` does longest-match segmentation with a
-de-inflection table so 会って resolves to 会う. `NLTagger` cannot help here — for
+Word lookup is local and follows Yomitan: the same dictionary (Jitendex, from
+https://jitendex.org) and the same algorithm. `scripts/build-ios-dict.mjs` builds a
+~60 MB SQLite file from the Jitendex zip. De-inflection is Yomitan's rule set, ported
+in `LanguageTransformer`; each dictionary entry carries Yomitan's grammatical codes
+(v5, v1, adj-i…), and a de-inflected form is only accepted by an entry whose class
+the chain could have produced — so いたら finds いる rather than 入る.
+
+Ranking matches Yomitan's without a frequency dictionary, which means it shares
+Yomitan's quirks there: うえ lists 飢え "hunger" before 上. Yomitan users fix that by
+installing a frequency dictionary, and so would this. `NLTagger` cannot help here — for
 Japanese it reports every token as `OtherWord` with an empty lemma, giving neither
 part of speech nor dictionary form.
 
@@ -51,7 +58,7 @@ Requires Xcode. `xcodegen` generates the project from `ios/project.yml`:
 
 ```sh
 brew install xcodegen
-npm run build:ios-dict                         # writes ios/Yomu/Resources/jmdict.sqlite
+npm run build:ios-dict -- path/to/jitendex-yomitan.zip   # writes ios/Yomu/Resources/jmdict.sqlite
 cd ios
 cp Secrets.xcconfig.example Secrets.xcconfig   # set YOMU_API_TOKEN to the API's APP_PASSWORD
 xcodegen generate

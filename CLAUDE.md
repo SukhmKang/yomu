@@ -34,8 +34,18 @@ needed hand-tuned constants and fit the sample it was written against.
 The app archives the exact JPEG it uploads and the exact response to its Documents
 directory; debug segmentation against those, never against a screenshot.
 
+Dictionary lookup follows Yomitan exactly: Jitendex as the dictionary, Yomitan's
+de-inflection rules (`vendor/yomitan`), and Yomitan's check that a de-inflected form
+matches the entry's grammatical codes. Do not add filters or ranking heuristics to
+patch individual lookups — every one tried so far fixed one word and broke others.
+When a result looks wrong, first check what real Yomitan returns;
+`~/Developer/japanese-term-select` runs the unmodified upstream engine. Several
+"wrong" results (うえ → 飢え, 前 → ぜん) are Yomitan's own behaviour without a
+frequency dictionary.
+
 `NLTagger` is useless for Japanese: every token comes back as `OtherWord` with an
-empty lemma. Word segmentation and de-inflection live in `JapaneseSegmenter`.
+empty lemma. `NLTokenizer`'s word boundaries are good, and are used so matches do
+not begin or end mid-word.
 
 Publish the frontend only in the owner's personal Vercel workspace,
 `sukhmkangs-projects`. The Exa workspace must not receive deployments for this app.

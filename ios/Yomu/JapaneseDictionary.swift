@@ -37,32 +37,35 @@ actor JapaneseDictionary {
 
     /// Every form a surface could be an inflection of, the surface itself first so
     /// a word that is already a headword is not de-inflected past its own entry.
-    private func candidates(for surface: String) -> [(form: String, isInflected: Bool)] {
+    /// Every form a surface could be an inflection of, with the grammatical
+    /// conditions the chain arrived at. The surface itself comes first, with no
+    /// conditions, so it matches any entry.
+    private func candidates(for surface: String) -> [(form: String, conditions: Int)] {
         var seen: Set<String> = [surface]
-        var forms = [(form: surface, isInflected: false)]
+        var forms = [(form: surface, conditions: 0)]
         for candidate in transformer?.transform(surface) ?? [] where seen.insert(candidate.text).inserted {
-            forms.append((form: candidate.text, isInflected: candidate.conditions != 0))
+            forms.append((form: candidate.text, conditions: candidate.conditions))
         }
         return forms
     }
 
-    /// Only verbs and i-adjectives inflect, so a form reached by de-inflection has
-    /// to land on one. Without this, やっていれば reached 奴 "fellow" — a noun that
-    /// no inflection could have produced. Yomitan checks the entry's part of speech
-    /// against the chain's grammatical conditions; this is the coarse version, since
-    /// the built dictionary records only "verb", "noun" and the like.
-    private static func canInflect(_ partOfSpeech: String) -> Bool {
-        // "expression" covers verb phrases such as やって来る, which inflect like
-        // the verb they end in; excluding it lost やってくれ → やって来る.
-        partOfSpeech.contains("verb") || partOfSpeech.contains("adjective")
-            || partOfSpeech == "expression"
+    /// Yomitan's `_matchEntriesToDeinflections`: a de-inflected form is only
+    /// accepted by an entry whose own grammatical class the chain could have
+    /// produced. いたら comes from an ichidan verb, so it finds 居る (v1) and not
+    /// 入る (v5); 離る has no modern class, so no inflection reaches it.
+    private func matches(_ row: Row, conditions: Int) -> Bool {
+        guard let transformer else { return conditions == 0 }
+        let parts = row.rules.split(separator: " ").map(String.init)
+        return LanguageTransformer.conditionsMatch(conditions,
+                                                   transformer.conditionFlags(forPartsOfSpeech: parts))
     }
 
     /// Grammar, not vocabulary — showing a gloss for these is noise.
-    /// Exactly as spelled in the built dictionary — "auxiliary verb" and "copula"
-    /// were guessed and match nothing, so this filter silently passed everything.
-    private static let skippedPartsOfSpeech: Set<String> = [
-        "particle", "aux verb", "conjunction", "interjection",
+    /// Jitendex part-of-speech codes that are grammar rather than vocabulary. An
+    /// entry is left out only when *every* code it carries is one of these: いる
+    /// is tagged aux-v as well as v1, and is still a word worth showing.
+    private static let grammaticalCodes: Set<String> = [
+        "prt", "conj", "aux", "aux-v", "aux-adj", "cop",
     ]
 
     /// Words that segment out of inflections and only ever mislead as glosses.
@@ -84,28 +87,28 @@ actor JapaneseDictionary {
         guard db != nil else { return [] }
 
         var seen = Set<String>()
-        let found = JapaneseSegmenter.segment(text) { surface -> VocabularyEntry? in
+        let found = JapaneseSegmenter.segment(text) { surface -> JapaneseSegmenter.Match<VocabularyEntry> in
+            // Rank first, then decide whether to show. Filtering before choosing
+            // promoted runners-up: the particle から ranked first, was dropped as
+            // grammar, and 殻 "shell" took its place.
             for candidate in candidates(for: surface) {
-                let form = candidate.form
-                let usable = lookup(form).filter {
-                    isWorthShowing($0, matched: form)
-                        && (!candidate.isInflected || Self.canInflect($0.partOfSpeech))
-                }
+                let usable = lookup(candidate.form).filter { matches($0, conditions: candidate.conditions) }
                 guard let best = usable.first else { continue }
+                guard isWorthShowing(best, matched: candidate.form) else { return .skip }
                 // A different headword with a different gloss is a real alternative;
                 // 箏 beside 琴 is the same word spelled differently, so it is not.
                 let alternatives = usable.dropFirst()
-                    .filter { $0.meaning != best.meaning }
+                    .filter { $0.meaning != best.meaning && isWorthShowing($0, matched: candidate.form) }
                     .prefix(1)
                     .map { "\($0.word) \($0.meaning)" }
-                return VocabularyEntry(surface: surface,
-                                       word: best.word,
-                                       reading: best.reading,
-                                       meaning: best.meaning,
-                                       partOfSpeech: best.partOfSpeech,
-                                       alternatives: Array(alternatives))
+                return .word(VocabularyEntry(surface: surface,
+                                             word: best.word,
+                                             reading: best.reading,
+                                             meaning: best.meaning,
+                                             partOfSpeech: best.partOfSpeech,
+                                             alternatives: Array(alternatives)))
             }
-            return nil
+            return .none
         }
 
         // Every word, not the first twenty: a swept selection used to stop silently
@@ -117,15 +120,11 @@ actor JapaneseDictionary {
     /// measure of how much text the entry explains. ていれば matches on てい, and a
     /// two-kana stem finding 鼎 "bronze vessel" is a homograph, not a reading.
     private func isWorthShowing(_ row: Row, matched: String) -> Bool {
-        if Self.skippedPartsOfSpeech.contains(row.partOfSpeech) { return false }
+        let codes = row.partOfSpeech.split(separator: " ").map(String.init)
+        if !codes.isEmpty && codes.allSatisfy(Self.grammaticalCodes.contains) { return false }
         if Self.stopWords.contains(row.word) { return false }
 
         let allKana = matched.allSatisfy(JapaneseSegmenter.isKana)
-        // Kana runs are where longest-match goes wrong, because inflections and
-        // particles collide with rare headwords: やって found 夜雨 "night rain",
-        // はならなかった found 離る. A kanji surface is unambiguous enough to trust,
-        // so only kana runs have to clear the common-word bar.
-        if allKana && !row.isCommon { return false }
         // A lone kana is a particle or an inflection fragment, never a word to learn.
         if allKana && matched.count < 2 { return false }
         return true
@@ -134,6 +133,8 @@ actor JapaneseDictionary {
     private struct Row {
         let word, reading, meaning, partOfSpeech: String
         let isCommon: Bool
+        /// Yomitan rule codes — v5, v1, adj-i — from Jitendex.
+        let rules: String
     }
 
     /// Candidates for a key, best first. Several are kept because the ranking
@@ -143,7 +144,7 @@ actor JapaneseDictionary {
         guard let db else { return [] }
         var statement: OpaquePointer?
         let sql = """
-            SELECT word, reading, meaning, pos, common FROM entries
+            SELECT word, reading, meaning, pos, common, rules FROM entries
             WHERE key = ? ORDER BY rank LIMIT 4
             """
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
@@ -159,7 +160,8 @@ actor JapaneseDictionary {
                 return String(cString: c)
             }
             rows.append(Row(word: column(0), reading: column(1), meaning: column(2),
-                            partOfSpeech: column(3), isCommon: sqlite3_column_int(statement, 4) == 1))
+                            partOfSpeech: column(3), isCommon: sqlite3_column_int(statement, 4) == 1,
+                            rules: column(5)))
         }
         return rows
     }

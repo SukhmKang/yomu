@@ -15,8 +15,7 @@
     "predev": "npm run build",
     "test:ui": "playwright test",
     "build:ios-dict": "node scripts/build-ios-dict.mjs",
-    "build:transforms": "node scripts/build-transforms.mjs",
-    "build:scores": "node scripts/build-scores.mjs"
+    "build:transforms": "node scripts/build-transforms.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

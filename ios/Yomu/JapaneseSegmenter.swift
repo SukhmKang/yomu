@@ -16,9 +16,20 @@ enum JapaneseSegmenter {
     /// Longest word we will try to match at one position.
     private static let maxWindow = 10
 
+    /// What a candidate span turned out to be.
+    enum Match<T> {
+        /// A word to show.
+        case word(T)
+        /// A real word that is not shown — a particle, say. Its span is consumed so
+        /// nothing shorter inside it is looked up in its place: から is a particle,
+        /// and without this the lookup fell through to 殻 "shell".
+        case skip
+        /// Not a word; try a shorter span.
+        case none
+    }
+
     /// Walk the text left to right, taking the longest match at each token start.
-    /// `resolve` returns nil when a candidate is not a word worth showing.
-    static func segment<T>(_ text: String, resolve: (_ surface: String) -> T?) -> [T] {
+    static func segment<T>(_ text: String, resolve: (_ surface: String) -> Match<T>) -> [T] {
         let characters = Array(text)
         let boundaries = tokenBoundaries(in: text, count: characters.count)
         var results: [T] = []
@@ -37,12 +48,17 @@ enum JapaneseSegmenter {
                 guard boundaries.contains(start + length) else { continue }
                 let surface = String(characters[start..<(start + length)])
                 guard surface.allSatisfy(isJapanese) else { continue }
-                if let value = resolve(surface) {
+                switch resolve(surface) {
+                case .word(let value):
                     results.append(value)
-                    start += length
-                    matched = true
+                case .skip:
                     break
+                case .none:
+                    continue
                 }
+                start += length
+                matched = true
+                break
             }
             if !matched { start += 1 }
         }

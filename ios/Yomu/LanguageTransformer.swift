@@ -30,6 +30,9 @@ final class LanguageTransformer {
     }
 
     private let transforms: [Transform]
+    /// Flags for the conditions a dictionary entry can itself be — Yomitan's
+    /// `_partOfSpeechToConditionFlagsMap`, holding only `isDictionaryForm` ones.
+    private let partOfSpeechFlags: [String: Int]
 
     static let japanese: LanguageTransformer? = {
         guard let url = Bundle.main.url(forResource: "japanese-transforms", withExtension: "json"),
@@ -40,6 +43,7 @@ final class LanguageTransformer {
     init?(data: Data) {
         guard let descriptor = try? JSONDecoder().decode(Descriptor.self, from: data) else { return nil }
         let flags = Self.conditionFlags(descriptor.conditions)
+        partOfSpeechFlags = flags.filter { descriptor.conditions[$0.key]?.isDictionaryForm == true }
 
         transforms = descriptor.transforms.map { transform in
             Transform(id: transform.id, rules: transform.rules.map { rule in
@@ -90,8 +94,17 @@ final class LanguageTransformer {
         return results
     }
 
+    /// Yomitan's `getConditionFlagsFromPartsOfSpeech`: an entry's rule codes
+    /// (v5, v1, adj-i…) as flags. An entry with no codes has no flags, so no
+    /// de-inflected form can match it.
+    func conditionFlags(forPartsOfSpeech parts: [String]) -> Int {
+        parts.compactMap { partOfSpeechFlags[$0] }.reduce(0, |)
+    }
+
     /// No conditions yet means anything may apply; otherwise the sets must overlap.
-    private static func conditionsMatch(_ current: Int, _ next: Int) -> Bool {
+    /// Used both between transforms and, as in Yomitan's translator, to check a
+    /// de-inflected form against the dictionary entry it landed on.
+    static func conditionsMatch(_ current: Int, _ next: Int) -> Bool {
         current == 0 || (current & next) != 0
     }
 
