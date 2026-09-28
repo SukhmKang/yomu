@@ -238,15 +238,23 @@ export function createApi({ env = process.env, fetchImpl = fetch } = {}) {
     let data = {};
     if (!readOnly) {
       const type = headers["content-type"] || headers["Content-Type"] || "";
-      if (!type.startsWith("application/json")) throw new HttpError(415, "Use application/json.");
-      const limit = pathname === "/api/vision" ? 12_100_000 : 100_000;
-      const raw = await readBody(limit);
-      try {
-        data = JSON.parse(raw.toString());
-      } catch {
-        throw new HttpError(400, "Invalid JSON.");
+      if (pathname === "/api/vision" && type.startsWith("image/jpeg")) {
+        // The iOS app sends the JPEG itself; base64 in JSON would be a third larger
+        // on the phone's upload, which is most of a scan's wait on cellular.
+        const raw = await readBody(9_000_000);
+        check(raw.length > 0, "Supply an image.");
+        data = { image: raw.toString("base64") };
+      } else {
+        if (!type.startsWith("application/json")) throw new HttpError(415, "Use application/json.");
+        const limit = pathname === "/api/vision" ? 12_100_000 : 100_000;
+        const raw = await readBody(limit);
+        try {
+          data = JSON.parse(raw.toString());
+        } catch {
+          throw new HttpError(400, "Invalid JSON.");
+        }
+        check(data && typeof data === "object" && !Array.isArray(data), "Invalid request.");
       }
-      check(data && typeof data === "object" && !Array.isArray(data), "Invalid request.");
     }
 
     if (pathname === "/api/session")

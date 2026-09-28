@@ -30,9 +30,7 @@ enum ScanArchive {
             guard let root else { return }
             let folder = root.appendingPathComponent(name, isDirectory: true)
             try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            if let jpeg = Data(base64Encoded: image.base64) {
-                try? jpeg.write(to: folder.appendingPathComponent("scan.jpg"))
-            }
+            try? image.jpeg.write(to: folder.appendingPathComponent("scan.jpg"))
             try? response.write(to: folder.appendingPathComponent("vision.json"))
             let meta = #"{"width":\#(Int(image.size.width)),"height":\#(Int(image.size.height))}"#
             try? Data(meta.utf8).write(to: folder.appendingPathComponent("meta.json"))

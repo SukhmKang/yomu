@@ -10,6 +10,10 @@ export default async function handler(req, res) {
 
   // Vercel may have already parsed the body; fall back to the raw stream when not.
   const readBody = async (limit) => {
+    if (Buffer.isBuffer(req.body)) {
+      if (req.body.length > limit) throw Object.assign(new Error("Request is too large."), { status: 413 });
+      return req.body;
+    }
     if (req.body !== undefined && req.body !== null) {
       const raw = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
       const buffer = Buffer.from(raw);

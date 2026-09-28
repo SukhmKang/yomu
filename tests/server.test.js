@@ -218,3 +218,24 @@ test("vision responses report the server's share of the time", async (t) => {
   const timing = res.headers.get("x-yomu-timing");
   assert.match(timing, /^vision=\d+;handler=\d+;cold=[01];region=\S+$/);
 });
+
+test("vision accepts the JPEG itself and forwards it to Google unchanged", async (t) => {
+  let request;
+  const base = await server(t, {
+    env: { GOOGLE_VISION_API_KEY: "vision-secret" },
+    fetchImpl: async (url, options) => {
+      request = { url, ...options };
+      return Response.json({ responses: [{ textAnnotations: [] }] });
+    },
+  });
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0xff, 0xd9]);
+  const send = (body) => fetch(base + "/api/vision", {
+    method: "POST",
+    headers: { "Content-Type": "image/jpeg", Authorization: "Bearer test-password" },
+    body,
+  });
+  assert.equal((await send(jpeg)).status, 200);
+  assert.equal(JSON.parse(request.body).requests[0].image.content, jpeg.toString("base64"));
+  assert.equal((await send(Buffer.alloc(0))).status, 400);
+  assert.equal((await send(Buffer.alloc(9_000_001))).status, 413);
+});

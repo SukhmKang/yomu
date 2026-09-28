@@ -35,6 +35,10 @@ final class Backend: ObservableObject {
     }
 
     private func request(_ path: String, body: [String: Any]) throws -> URLRequest {
+        try request(path, body: JSONSerialization.data(withJSONObject: body), type: "application/json")
+    }
+
+    private func request(_ path: String, body: Data, type: String) throws -> URLRequest {
         guard !token.isEmpty else {
             throw YomuError.message("No API token is built into this app. Set YOMU_API_TOKEN in ios/Secrets.xcconfig and rebuild.")
         }
@@ -43,9 +47,9 @@ final class Backend: ObservableObject {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(type, forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.httpBody = body
         return request
     }
 
@@ -54,7 +58,9 @@ final class Backend: ObservableObject {
         guard let encoded = image.downscaledJPEG() else {
             throw YomuError.message("That photo could not be prepared for scanning.")
         }
-        let request = try request("/api/vision", body: ["image": encoded.base64])
+        // The JPEG itself: base64 in JSON is a third larger, and the upload is most of
+        // a scan's wait on a slow connection.
+        let request = try request("/api/vision", body: encoded.jpeg, type: "image/jpeg")
         timeline?.mark("encoded")
         timeline?.note("image", "\(Int(encoded.size.width))x\(Int(encoded.size.height))")
         timeline?.note("payloadKB", String((request.httpBody?.count ?? 0) / 1024))

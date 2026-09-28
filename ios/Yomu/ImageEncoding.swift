@@ -4,7 +4,7 @@ import UIKit
 /// the space of the image it was given, so boxes must be normalised against this
 /// size and not the original — otherwise every tap target lands in the wrong place.
 struct EncodedImage {
-    let base64: String
+    let jpeg: Data
     let size: CGSize
 }
 
@@ -23,7 +23,7 @@ extension UIImage {
             draw(in: CGRect(origin: .zero, size: target))
         }
         guard let data = rendered.jpegData(compressionQuality: quality) else { return nil }
-        return EncodedImage(base64: data.base64EncodedString(), size: target)
+        return EncodedImage(jpeg: data, size: target)
     }
 }
 
