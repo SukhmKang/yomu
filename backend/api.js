@@ -32,6 +32,9 @@ const PROTECTED = ["/api/vision", "/api/explain", "/api/explain-stream"];
 
 export function createApi({ env = process.env, fetchImpl = fetch } = {}) {
   let attempts = 0, attemptWindow = 0;
+  // A serverless instance handles its first request cold; knowing which scans
+  // paid for that separates a slow platform from a slow request.
+  let invocations = 0;
   const digest = (value) => createHash("sha256").update(value).digest();
   const sign = (value) =>
     createHmac("sha256", env.APP_PASSWORD || "").update(value).digest("hex");
@@ -174,7 +177,7 @@ export function createApi({ env = process.env, fetchImpl = fetch } = {}) {
     }
   }
 
-  async function provider(pathname, data) {
+  async function provider(pathname, data, timing = {}) {
     if (pathname === "/api/status")
       return { vision: !!env.GOOGLE_VISION_API_KEY, explanations: !!env.OPENAI_API_KEY };
 
@@ -182,6 +185,7 @@ export function createApi({ env = process.env, fetchImpl = fetch } = {}) {
       check(string(data.image, 12_000_000) && /^[A-Za-z0-9+/]+={0,2}$/.test(data.image),
         "Supply a base64 image (maximum 9 MB).");
       const key = requireKey("GOOGLE_VISION_API_KEY");
+      const visionStart = Date.now();
       const result = await upstream("https://vision.googleapis.com/v1/images:annotate", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key },
@@ -193,6 +197,7 @@ export function createApi({ env = process.env, fetchImpl = fetch } = {}) {
           }],
         }),
       });
+      timing.vision = Date.now() - visionStart;
       if (result.responses?.[0]?.error)
         throw new HttpError(502,
           "Text detection failed. Check the image and server Vision configuration.");
@@ -212,6 +217,8 @@ export function createApi({ env = process.env, fetchImpl = fetch } = {}) {
 
   /// `readBody(limit)` returns the raw request body, throwing 413 past `limit`.
   async function handle({ method, pathname, headers = {}, readBody }) {
+    const handlerStart = Date.now();
+    const cold = invocations++ === 0;
     const readOnly = READ_ONLY.includes(pathname);
     if (method !== (readOnly ? "GET" : "POST"))
       throw new HttpError(405, "Method not allowed.");
@@ -272,7 +279,23 @@ export function createApi({ env = process.env, fetchImpl = fetch } = {}) {
       return { status: 200, stream: aiStream(data) };
     }
 
-    return { status: 200, body: await provider(pathname, data) };
+    const timing = {};
+    const body = await provider(pathname, data, timing);
+    if (pathname !== "/api/vision") return { status: 200, body };
+    // Vision's own time against ours, so the app can split the server's share of
+    // the wait from the network's.
+    return {
+      status: 200,
+      body,
+      headers: {
+        "X-Yomu-Timing": [
+          `vision=${timing.vision ?? -1}`,
+          `handler=${Date.now() - handlerStart}`,
+          `cold=${cold ? 1 : 0}`,
+          `region=${env.VERCEL_REGION ?? "local"}`,
+        ].join(";"),
+      },
+    };
   }
 
   return { handle, authenticated };

@@ -8,15 +8,27 @@ struct VocabularyEntry: Identifiable, Equatable {
     let reading: String
     let meaning: String
     let partOfSpeech: String
-    /// Other headwords sharing this reading, when the dictionary cannot separate
-    /// them — こと is both 事 "thing" and 琴 "koto", with identical popularity.
-    let alternatives: [String]
+    /// Every entry the surface matched, best first, one per headword — the list
+    /// Yomitan shows. The first is the one summarised above.
+    let candidates: [DictionaryCandidate]
 
     var isInflected: Bool { surface != word }
 
     static func == (a: VocabularyEntry, b: VocabularyEntry) -> Bool {
         a.surface == b.surface && a.word == b.word && a.reading == b.reading
     }
+}
+
+struct DictionaryCandidate: Identifiable, Hashable {
+    var id: String { "\(word)\t\(reading)" }
+    let word: String
+    let reading: String
+    let senses: [String]
+    let partOfSpeech: String
+    /// The dictionary form the surface was de-inflected to, when it was.
+    let viaForm: String?
+    /// JPDB rank; lower is more common.
+    let frequency: Int?
 }
 
 /// JMdict, bundled as SQLite. Lookups are local, instant, and work offline — the web
@@ -50,7 +62,8 @@ actor JapaneseDictionary {
     /// frequency (lower rank is more common; none sorts last), then score.
     /// Source length is the segmenter's longest match; reading-match and
     /// text-processing tiers have no counterpart here.
-    private static func yomitanOrder(surface: String) -> ((steps: Int, row: Row), (steps: Int, row: Row)) -> Bool {
+    private static func yomitanOrder(surface: String)
+        -> ((steps: Int, form: String, row: Row), (steps: Int, form: String, row: Row)) -> Bool {
         { a, b in
             if a.steps != b.steps { return a.steps < b.steps }
             let exactA = a.row.word == surface, exactB = b.row.word == surface
@@ -103,10 +116,10 @@ actor JapaneseDictionary {
             // Every form the surface could be, and every entry each form reaches,
             // ranked together as Yomitan does — not first form wins. なって is both
             // なう and なる at one step; frequency is what separates them.
-            var matched: [(steps: Int, row: Row)] = []
+            var matched: [(steps: Int, form: String, row: Row)] = []
             for candidate in candidates(for: surface) {
                 for row in lookup(candidate.text) where matches(row, conditions: candidate.conditions) {
-                    matched.append((candidate.steps, row))
+                    matched.append((candidate.steps, candidate.text, row))
                 }
             }
             let ranked = matched.sorted(by: Self.yomitanOrder(surface: surface))
@@ -115,19 +128,25 @@ actor JapaneseDictionary {
             // promoted runners-up — the particle から ranked first, was dropped, and
             // 殻 "shell" took its place.
             guard isWorthShowing(best, matched: surface) else { return .skip }
-            // A different headword with a different gloss is a real alternative;
-            // 箏 beside 琴 is the same word spelled differently, so it is not.
-            var seenMeanings: Set<String> = [best.meaning]
-            let alternatives = ranked.dropFirst().map(\.row)
-                .filter { seenMeanings.insert($0.meaning).inserted && isWorthShowing($0, matched: surface) }
-                .prefix(1)
-                .map { "\($0.word) \($0.meaning)" }
+            // The whole ranked list, one row per headword as Yomitan groups them. A
+            // headword reached through several forms keeps its best-ranked match.
+            var seen = Set<String>()
+            let candidates = ranked.compactMap { match -> DictionaryCandidate? in
+                let row = match.row
+                guard seen.insert("\(row.word)\t\(row.reading)").inserted else { return nil }
+                return DictionaryCandidate(word: row.word,
+                                           reading: row.reading,
+                                           senses: row.senses,
+                                           partOfSpeech: row.partOfSpeech,
+                                           viaForm: match.form == surface ? nil : match.form,
+                                           frequency: row.frequency)
+            }
             return .word(VocabularyEntry(surface: surface,
                                          word: best.word,
                                          reading: best.reading,
                                          meaning: best.meaning,
                                          partOfSpeech: best.partOfSpeech,
-                                         alternatives: Array(alternatives)))
+                                         candidates: candidates))
             return .none
         }
 
@@ -158,6 +177,7 @@ actor JapaneseDictionary {
         let score: Int
         /// JPDB rank; lower is more common.
         let frequency: Int?
+        let senses: [String]
     }
 
     /// Candidates for a key, best first. Several are kept because the ranking
@@ -167,7 +187,7 @@ actor JapaneseDictionary {
         guard let db else { return [] }
         var statement: OpaquePointer?
         let sql = """
-            SELECT word, reading, meaning, pos, common, rules, score, freq FROM entries
+            SELECT word, reading, meaning, pos, common, rules, score, freq, senses FROM entries
             WHERE key = ? ORDER BY rank
             """
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
@@ -186,7 +206,8 @@ actor JapaneseDictionary {
                             partOfSpeech: column(3), isCommon: sqlite3_column_int(statement, 4) == 1,
                             rules: column(5), score: Int(sqlite3_column_int(statement, 6)),
                             frequency: sqlite3_column_type(statement, 7) == SQLITE_NULL
-                                ? nil : Int(sqlite3_column_int(statement, 7))))
+                                ? nil : Int(sqlite3_column_int(statement, 7)),
+                            senses: column(8).split(separator: "\n").map(String.init)))
         }
         return rows
     }

@@ -129,7 +129,7 @@ final class CameraController: NSObject, ObservableObject {
         device.isSubjectAreaChangeMonitoringEnabled = false
     }
 
-    func capture() async throws -> UIImage {
+    func capture(timeline: ScanTimeline? = nil) async throws -> UIImage {
         guard status == .running else { throw YomuError.message("The camera is not ready yet.") }
         isCapturing = true
         defer { isCapturing = false }
@@ -143,8 +143,11 @@ final class CameraController: NSObject, ObservableObject {
             pendingCapture = continuation
             output.capturePhoto(with: settings, delegate: self)
         }
+        timeline?.mark("captured")
         guard let aspect = previewAspectRatio else { return captured }
-        return captured.centreCropped(toAspectRatio: aspect)
+        let cropped = captured.centreCropped(toAspectRatio: aspect)
+        timeline?.mark("cropped")
+        return cropped
     }
 }
 

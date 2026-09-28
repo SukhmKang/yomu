@@ -207,3 +207,14 @@ test("the explanation model is chosen from an allow-list, never passed through",
   await post(base + "/api/explain", { ...input, model: "gpt-5.6-luna" });
   assert.deepEqual(JSON.parse(JSON.parse(request.body).input[0].content), input);
 });
+
+test("vision responses report the server's share of the time", async (t) => {
+  const base = await server(t, {
+    env: { GOOGLE_VISION_API_KEY: "vision-secret" },
+    fetchImpl: async () => Response.json({ responses: [{ textAnnotations: [] }] }),
+  });
+  const res = await post(base + "/api/vision", { image: "aGVsbG8=" });
+  assert.equal(res.status, 200);
+  const timing = res.headers.get("x-yomu-timing");
+  assert.match(timing, /^vision=\d+;handler=\d+;cold=[01];region=\S+$/);
+});

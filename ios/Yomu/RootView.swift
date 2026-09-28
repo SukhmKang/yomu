@@ -24,8 +24,8 @@ struct RootView: View {
         .task { await camera.start() }
     }
 
-    private func present(_ image: UIImage) {
-        reader = ReaderModel(image: image, backend: backend)
+    private func present(_ image: UIImage, timeline: ScanTimeline) {
+        reader = ReaderModel(image: image, backend: backend, timeline: timeline)
     }
 
     private func dismissReader() {
@@ -36,7 +36,7 @@ struct RootView: View {
 private struct CameraScreen: View {
     @ObservedObject var camera: CameraController
     @Binding var captureError: String?
-    let onCapture: (UIImage) -> Void
+    let onCapture: (UIImage, ScanTimeline) -> Void
     @State private var pickedItem: PhotosPickerItem?
     @State private var showSettings = false
 
@@ -105,12 +105,14 @@ private struct CameraScreen: View {
         guard let item else { return }
         Task {
             defer { pickedItem = nil }
+            let timeline = ScanTimeline(source: .library)
             guard let data = try? await item.loadTransferable(type: Data.self),
                   let image = UIImage(data: data) else {
                 captureError = "That image could not be opened."
                 return
             }
-            onCapture(image)
+            timeline.mark("loaded")
+            onCapture(image, timeline)
         }
     }
 
@@ -132,7 +134,9 @@ private struct CameraScreen: View {
         Task {
             do {
                 captureError = nil
-                onCapture(try await camera.capture())
+                // The clock starts at the shutter press, before the capture.
+                let timeline = ScanTimeline(source: .camera)
+                onCapture(try await camera.capture(timeline: timeline), timeline)
             } catch {
                 captureError = error.localizedDescription
             }

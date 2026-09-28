@@ -63,12 +63,35 @@ enum ScanArchive {
         }
     }
 
+    /// One line per scan in `scans/timings.jsonl`, which pruning leaves alone, so
+    /// latency can be compared across many scans rather than the last twelve.
+    static func appendTiming(scan: String?, record: [String: String]) {
+        queue.async {
+            guard let root else { return }
+            var fields = record
+            fields["scan"] = scan ?? ""
+            fields["at"] = ISO8601DateFormatter().string(from: Date())
+            guard let line = try? JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys])
+            else { return }
+            try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            let file = root.appendingPathComponent("timings.jsonl")
+            if let handle = try? FileHandle(forWritingTo: file) {
+                defer { try? handle.close() }
+                try? handle.seekToEnd()
+                try? handle.write(contentsOf: line + Data("\n".utf8))
+            } else {
+                try? (line + Data("\n".utf8)).write(to: file)
+            }
+        }
+    }
+
     private static func prune() {
         guard let root,
               let folders = try? FileManager.default.contentsOfDirectory(
                 at: root, includingPropertiesForKeys: nil) else { return }
         // Names sort chronologically, so the oldest are simply the first.
-        for folder in folders.map(\.lastPathComponent).sorted().dropLast(keep) {
+        let scans = folders.map(\.lastPathComponent).filter { !$0.hasSuffix(".jsonl") }
+        for folder in scans.sorted().dropLast(keep) {
             try? FileManager.default.removeItem(at: root.appendingPathComponent(folder))
         }
     }

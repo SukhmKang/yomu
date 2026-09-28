@@ -70,7 +70,7 @@ function describe(glossary) {
       }
     });
   }
-  return { meaning: senses[0] ?? "", pos: [...pos].join(" ") };
+  return { meaning: senses[0] ?? "", senses, pos: [...pos].join(" ") };
 }
 
 // --- Build ---------------------------------------------------------------------
@@ -113,9 +113,9 @@ try {
   for (const file of readdirSync(work).filter((n) => n.startsWith("term_bank_"))) {
     // Yomitan term bank row: [term, reading, definitionTags, rules, score, glossary, sequence, termTags]
     for (const [term, reading, defTags, rules, score, glossary] of JSON.parse(readFileSync(path.join(work, file), "utf8"))) {
-      const { meaning, pos } = describe(glossary);
+      const { meaning, senses, pos } = describe(glossary);
       if (!meaning) continue;
-      const entry = { term, reading: reading || term, meaning, pos, rules: rules ?? "",
+      const entry = { term, reading: reading || term, meaning, senses, pos, rules: rules ?? "",
                       score: score | 0, priority: /★/.test(defTags ?? ""),
                       freq: frequency(term, reading || term) };
       // Reachable by either spelling, as Yomitan looks up both.
@@ -138,12 +138,12 @@ try {
   const escape = (s) => `'${String(s ?? "").replaceAll("'", "''")}'`;
   const lines = [
     "PRAGMA journal_mode=OFF;", "PRAGMA synchronous=OFF;", "BEGIN;",
-    "CREATE TABLE entries (key TEXT, rank INTEGER, word TEXT, reading TEXT, meaning TEXT, pos TEXT, common INTEGER, rules TEXT, score INTEGER, freq INTEGER);",
+    "CREATE TABLE entries (key TEXT, rank INTEGER, word TEXT, reading TEXT, meaning TEXT, pos TEXT, common INTEGER, rules TEXT, score INTEGER, freq INTEGER, senses TEXT);",
   ];
   for (const [key, entries] of byKey) {
     [...entries].sort(rank).forEach((e, position) => {
       lines.push(`INSERT INTO entries VALUES(${escape(key)},${position},${escape(e.term)},${escape(e.reading)},` +
-                 `${escape(e.meaning)},${escape(e.pos)},${e.priority ? 1 : 0},${escape(e.rules)},${e.score},${e.freq ?? "NULL"});`);
+                 `${escape(e.meaning)},${escape(e.pos)},${e.priority ? 1 : 0},${escape(e.rules)},${e.score},${e.freq ?? "NULL"},${escape(e.senses.join("\n"))});`);
     });
   }
   lines.push("CREATE INDEX entries_key ON entries(key, rank);", "COMMIT;", "VACUUM;");

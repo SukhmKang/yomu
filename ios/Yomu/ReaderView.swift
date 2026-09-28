@@ -13,7 +13,8 @@ struct ReaderView: View {
                      regions: model.regions,
                      selected: model.selected,
                      bottomInset: model.selection.isEmpty ? 0 : UnderstandPanel.openHeight,
-                     onSelect: model.select)
+                     onSelect: model.select,
+                     onRendered: model.bubblesAppeared)
                 .ignoresSafeArea(edges: .horizontal)
 
             topBar
@@ -52,6 +53,11 @@ struct ReaderView: View {
             .font(.caption)
             .padding(.horizontal, 12).padding(.vertical, 8)
             .background(.ultraThinMaterial, in: Capsule())
+        } else if let duration = model.scanDuration {
+            Text(duration)
+                .font(.caption.monospacedDigit())
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule())
         } else if let error = model.scanError {
             Text(error)
                 .font(.caption)
@@ -67,6 +73,7 @@ private struct UnderstandPanel: View {
     static let openHeight: CGFloat = 320
 
     @ObservedObject var model: ReaderModel
+    @State private var inspected: VocabularyEntry?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -115,31 +122,39 @@ private struct UnderstandPanel: View {
     private var vocabulary: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(model.vocabulary) { entry in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(entry.word)
-                        .font(.system(size: 16, weight: .semibold))
-                    if !entry.reading.isEmpty, entry.reading != entry.word {
-                        Text(entry.reading)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
+                Button { inspected = entry } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(entry.word)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        if !entry.reading.isEmpty, entry.reading != entry.word {
+                            Text(entry.reading)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         Text(entry.meaning)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
-                        // Shown when the dictionary cannot separate two readings of
-                        // equal standing, rather than picking one and hiding it.
-                        ForEach(entry.alternatives, id: \.self) { alternative in
-                            Text(alternative)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 4)
+                        // Only one reading is summarised, and the ranking can be wrong;
+                        // the rest are a tap away rather than hidden.
+                        if entry.candidates.count > 1 {
+                            Text("+\(entry.candidates.count - 1)")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
-                                .lineLimit(1)
                         }
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
+        .sheet(item: $inspected) { WordDetailView(entry: $0) }
     }
 
     @ViewBuilder private var explanation: some View {

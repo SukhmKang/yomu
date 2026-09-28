@@ -50,22 +50,40 @@ final class Backend: ObservableObject {
     }
 
     /// Scan a page. The image never touches disk and is sent once, downscaled.
-    func scan(image: UIImage) async throws -> ScannedPage {
+    func scan(image: UIImage, timeline: ScanTimeline? = nil) async throws -> ScannedPage {
         guard let encoded = image.downscaledJPEG() else {
             throw YomuError.message("That photo could not be prepared for scanning.")
         }
         let request = try request("/api/vision", body: ["image": encoded.base64])
+        timeline?.mark("encoded")
+        timeline?.note("image", "\(Int(encoded.size.width))x\(Int(encoded.size.height))")
+        timeline?.note("payloadKB", String((request.httpBody?.count ?? 0) / 1024))
+
+        let collector = MetricsCollector()
         let data: Data, response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await session.data(for: request, delegate: collector)
         } catch {
             throw YomuError.message("Cannot reach Yomu. Check your connection.")
         }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        timeline?.mark("response")
+        // Collected off the scan's path, so measuring does not add to what is measured.
+        if let timeline {
+            Task { @MainActor in
+                if let metrics = await collector.metrics() { timeline.note(metrics) }
+            }
+        }
+        let http = response as? HTTPURLResponse
+        if let server = http?.value(forHTTPHeaderField: "X-Yomu-Timing") {
+            timeline?.note("server", server)
+        }
+        let status = http?.statusCode ?? 0
         if let problem = describe(status, action: "read") { throw YomuError.message(problem) }
         lastScan = ScanArchive.save(image: encoded, response: data)
         // Normalise against the size actually sent, not the original.
-        return try VisionResponse.parse(data, imageSize: encoded.size)
+        let page = try VisionResponse.parse(data, imageSize: encoded.size)
+        timeline?.mark("parsed")
+        return page
     }
 
     private func explainBody(text: String, context: String, level: String) -> [String: Any] {

@@ -15,11 +15,14 @@ struct PageView: UIViewRepresentable {
     /// than taken out of the layout, so the image keeps its size and position.
     let bottomInset: CGFloat
     let onSelect: (Set<Int>) -> Void
+    /// Fires once the tap targets for a page are laid out, for timing.
+    var onRendered: () -> Void = {}
 
     func makeUIView(context: Context) -> ZoomablePageView {
         let view = ZoomablePageView()
         view.setImage(image)
         view.onSelect = onSelect
+        view.onRendered = onRendered
         view.setRegions(regions, selected: selected)
         view.bottomInset = bottomInset
         return view
@@ -27,6 +30,7 @@ struct PageView: UIViewRepresentable {
 
     func updateUIView(_ view: ZoomablePageView, context: Context) {
         view.onSelect = onSelect
+        view.onRendered = onRendered
         if view.imageView.image !== image { view.setImage(image) }
         view.setRegions(regions, selected: selected)
         view.bottomInset = bottomInset
@@ -37,6 +41,7 @@ final class ZoomablePageView: UIView, UIScrollViewDelegate, UIGestureRecognizerD
     let scrollView = UIScrollView()
     let imageView = UIImageView()
     var onSelect: ((Set<Int>) -> Void)?
+    var onRendered: (() -> Void)?
 
     /// Extra room to scroll so bubbles behind the panel stay reachable. It never
     /// changes the image's size or centring, so tap targets do not move.
@@ -137,6 +142,10 @@ final class ZoomablePageView: UIView, UIScrollViewDelegate, UIGestureRecognizerD
         }
         layoutTargets()
         restyle()
+        // Next turn of the run loop, after this layout has been committed to screen.
+        if !regions.isEmpty {
+            DispatchQueue.main.async { [weak self] in self?.onRendered?() }
+        }
     }
 
     private func layoutTargets() {

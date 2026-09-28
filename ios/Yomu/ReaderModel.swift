@@ -38,9 +38,26 @@ final class ReaderModel: ObservableObject {
     private var vocabularyTask: Task<Void, Never>?
     private var cache: [String: String] = [:]
 
-    init(image: UIImage, backend: Backend) {
+    /// Shutter-to-bubbles time, shown briefly once the bubbles appear.
+    @Published private(set) var scanDuration: String?
+
+    private let timeline: ScanTimeline?
+
+    init(image: UIImage, backend: Backend, timeline: ScanTimeline? = nil) {
         self.image = image
         self.backend = backend
+        self.timeline = timeline
+    }
+
+    /// Called by the page once its tap targets are laid out and on screen.
+    func bubblesAppeared() {
+        guard let timeline, !timeline.finished else { return }
+        let total = timeline.finish(scan: backend.lastScan)
+        scanDuration = String(format: "%.2f s", total / 1000)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            self?.scanDuration = nil
+        }
     }
 
     var regions: [TextRegion] { page?.regions ?? [] }
@@ -49,8 +66,9 @@ final class ReaderModel: ObservableObject {
     func scan() async {
         isScanning = true
         scanError = nil
+        timeline?.mark("reader")
         do {
-            page = try await backend.scan(image: image)
+            page = try await backend.scan(image: image, timeline: timeline)
             ScanArchive.log(scan: backend.lastScan, event: "scanned",
                             detail: ["regions": (page?.regions ?? []).map(\.text).joined(separator: " / ")])
         } catch {
