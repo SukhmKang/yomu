@@ -4,6 +4,11 @@ import SwiftUI
 struct YomuApp: App {
     @StateObject private var backend = Backend()
 
+    init() {
+        // Start watching the network now, so the first scan knows Wi-Fi from cellular.
+        _ = NetworkStatus.shared
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

@@ -69,7 +69,7 @@ final class Backend: ObservableObject {
         timeline?.mark("response")
         // Collected off the scan's path, so measuring does not add to what is measured.
         if let timeline {
-            Task { @MainActor in
+            timeline.metricsTask = Task { @MainActor in
                 if let metrics = await collector.metrics() { timeline.note(metrics) }
             }
         }

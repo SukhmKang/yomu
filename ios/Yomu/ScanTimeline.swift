@@ -16,6 +16,9 @@ final class ScanTimeline {
     private var marks: [(name: String, at: Duration)] = []
     private var details: [String: String] = [:]
     private(set) var finished = false
+    /// Network metrics arrive from iOS around when the response does, sometimes
+    /// after the bubbles are already drawn. The record waits for them.
+    var metricsTask: Task<Void, Never>?
 
     init(source: Source) {
         self.source = source
@@ -55,24 +58,34 @@ final class ScanTimeline {
         details["net.sentKB"] = String(metrics.countOfRequestBodyBytesSent / 1024)
     }
 
-    /// Close the record and write it. Returns total milliseconds.
+    /// Close the record and write it. Returns total milliseconds, straight away;
+    /// the write waits for any network metrics still on their way.
     @discardableResult
     func finish(scan: String?) -> Double {
         guard !finished else { return elapsed }
         finished = true
         mark("rendered")
+        let total = marks.last.map { Self.milliseconds($0.at) } ?? elapsed
+        let pending = metricsTask
+        Task { @MainActor in
+            await pending?.value
+            self.write(scan: scan, total: total)
+        }
+        return total
+    }
+
+    private func write(scan: String?, total: Double) {
         var record = details
+        if record["net.total"] == nil { record["net.metrics"] = "missing" }
         var previous = Duration.zero
         for (name, at) in marks {
             record["at.\(name)"] = String(Int(Self.milliseconds(at)))
             record["step.\(name)"] = String(Int(Self.milliseconds(at - previous)))
             previous = at
         }
-        let total = marks.last.map { Self.milliseconds($0.at) } ?? elapsed
         record["total"] = String(Int(total))
         ScanArchive.log(scan: scan, event: "timing", detail: record)
         ScanArchive.appendTiming(scan: scan, record: record)
-        return total
     }
 
     private static func milliseconds(_ duration: Duration) -> Double {
@@ -117,7 +130,7 @@ final class MetricsCollector: NSObject, URLSessionTaskDelegate, @unchecked Senda
 
     /// Metrics arrive around when the response does; allow them a moment.
     func metrics() async -> URLSessionTaskTransactionMetrics? {
-        for _ in 0..<20 {
+        for _ in 0..<80 {
             if let value = lock.withLock({ collected }) { return value }
             try? await Task.sleep(for: .milliseconds(25))
         }
