@@ -40,13 +40,25 @@ actor JapaneseDictionary {
     /// Every form a surface could be an inflection of, with the grammatical
     /// conditions the chain arrived at. The surface itself comes first, with no
     /// conditions, so it matches any entry.
-    private func candidates(for surface: String) -> [(form: String, conditions: Int)] {
-        var seen: Set<String> = [surface]
-        var forms = [(form: surface, conditions: 0)]
-        for candidate in transformer?.transform(surface) ?? [] where seen.insert(candidate.text).inserted {
-            forms.append((form: candidate.text, conditions: candidate.conditions))
+    private func candidates(for surface: String) -> [LanguageTransformer.TransformedText] {
+        transformer?.transform(surface)
+            ?? [LanguageTransformer.TransformedText(text: surface, conditions: 0, steps: 0)]
+    }
+
+    /// Yomitan's `_sortTermDictionaryEntries`, for the tiers this data carries:
+    /// shorter inflection chain, then an exact match of the text as written, then
+    /// frequency (lower rank is more common; none sorts last), then score.
+    /// Source length is the segmenter's longest match; reading-match and
+    /// text-processing tiers have no counterpart here.
+    private static func yomitanOrder(surface: String) -> ((steps: Int, row: Row), (steps: Int, row: Row)) -> Bool {
+        { a, b in
+            if a.steps != b.steps { return a.steps < b.steps }
+            let exactA = a.row.word == surface, exactB = b.row.word == surface
+            if exactA != exactB { return exactA }
+            let freqA = a.row.frequency ?? .max, freqB = b.row.frequency ?? .max
+            if freqA != freqB { return freqA < freqB }
+            return a.row.score > b.row.score
         }
-        return forms
     }
 
     /// Yomitan's `_matchEntriesToDeinflections`: a de-inflected form is only
@@ -88,26 +100,34 @@ actor JapaneseDictionary {
 
         var seen = Set<String>()
         let found = JapaneseSegmenter.segment(text) { surface -> JapaneseSegmenter.Match<VocabularyEntry> in
-            // Rank first, then decide whether to show. Filtering before choosing
-            // promoted runners-up: the particle から ranked first, was dropped as
-            // grammar, and 殻 "shell" took its place.
+            // Every form the surface could be, and every entry each form reaches,
+            // ranked together as Yomitan does — not first form wins. なって is both
+            // なう and なる at one step; frequency is what separates them.
+            var matched: [(steps: Int, row: Row)] = []
             for candidate in candidates(for: surface) {
-                let usable = lookup(candidate.form).filter { matches($0, conditions: candidate.conditions) }
-                guard let best = usable.first else { continue }
-                guard isWorthShowing(best, matched: candidate.form) else { return .skip }
-                // A different headword with a different gloss is a real alternative;
-                // 箏 beside 琴 is the same word spelled differently, so it is not.
-                let alternatives = usable.dropFirst()
-                    .filter { $0.meaning != best.meaning && isWorthShowing($0, matched: candidate.form) }
-                    .prefix(1)
-                    .map { "\($0.word) \($0.meaning)" }
-                return .word(VocabularyEntry(surface: surface,
-                                             word: best.word,
-                                             reading: best.reading,
-                                             meaning: best.meaning,
-                                             partOfSpeech: best.partOfSpeech,
-                                             alternatives: Array(alternatives)))
+                for row in lookup(candidate.text) where matches(row, conditions: candidate.conditions) {
+                    matched.append((candidate.steps, row))
+                }
             }
+            let ranked = matched.sorted(by: Self.yomitanOrder(surface: surface))
+            guard let best = ranked.first?.row else { return .none }
+            // Rank first, then decide whether to show: filtering before choosing
+            // promoted runners-up — the particle から ranked first, was dropped, and
+            // 殻 "shell" took its place.
+            guard isWorthShowing(best, matched: surface) else { return .skip }
+            // A different headword with a different gloss is a real alternative;
+            // 箏 beside 琴 is the same word spelled differently, so it is not.
+            var seenMeanings: Set<String> = [best.meaning]
+            let alternatives = ranked.dropFirst().map(\.row)
+                .filter { seenMeanings.insert($0.meaning).inserted && isWorthShowing($0, matched: surface) }
+                .prefix(1)
+                .map { "\($0.word) \($0.meaning)" }
+            return .word(VocabularyEntry(surface: surface,
+                                         word: best.word,
+                                         reading: best.reading,
+                                         meaning: best.meaning,
+                                         partOfSpeech: best.partOfSpeech,
+                                         alternatives: Array(alternatives)))
             return .none
         }
 
@@ -135,6 +155,9 @@ actor JapaneseDictionary {
         let isCommon: Bool
         /// Yomitan rule codes — v5, v1, adj-i — from Jitendex.
         let rules: String
+        let score: Int
+        /// JPDB rank; lower is more common.
+        let frequency: Int?
     }
 
     /// Candidates for a key, best first. Several are kept because the ranking
@@ -144,8 +167,8 @@ actor JapaneseDictionary {
         guard let db else { return [] }
         var statement: OpaquePointer?
         let sql = """
-            SELECT word, reading, meaning, pos, common, rules FROM entries
-            WHERE key = ? ORDER BY rank LIMIT 4
+            SELECT word, reading, meaning, pos, common, rules, score, freq FROM entries
+            WHERE key = ? ORDER BY rank
             """
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(statement) }
@@ -161,7 +184,9 @@ actor JapaneseDictionary {
             }
             rows.append(Row(word: column(0), reading: column(1), meaning: column(2),
                             partOfSpeech: column(3), isCommon: sqlite3_column_int(statement, 4) == 1,
-                            rules: column(5)))
+                            rules: column(5), score: Int(sqlite3_column_int(statement, 6)),
+                            frequency: sqlite3_column_type(statement, 7) == SQLITE_NULL
+                                ? nil : Int(sqlite3_column_int(statement, 7))))
         }
         return rows
     }

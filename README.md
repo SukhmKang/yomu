@@ -37,9 +37,10 @@ in `LanguageTransformer`; each dictionary entry carries Yomitan's grammatical co
 (v5, v1, adj-i…), and a de-inflected form is only accepted by an entry whose class
 the chain could have produced — so いたら finds いる rather than 入る.
 
-Ranking matches Yomitan's without a frequency dictionary, which means it shares
-Yomitan's quirks there: うえ lists 飢え "hunger" before 上. Yomitan users fix that by
-installing a frequency dictionary, and so would this. `NLTagger` cannot help here — for
+Ranking follows Yomitan's comparator — shorter inflection chain, exact match of
+the text as written, frequency (JPDB), then score — across every form a word could
+be, not the first that matches. JPDB is the frequency dictionary Yomitan users
+install; without it Yomitan lists うえ as 飢え "hunger" before 上. `NLTagger` cannot help here — for
 Japanese it reports every token as `OtherWord` with an empty lemma, giving neither
 part of speech nor dictionary form.
 
@@ -58,7 +59,10 @@ Requires Xcode. `xcodegen` generates the project from `ios/project.yml`:
 
 ```sh
 brew install xcodegen
-npm run build:ios-dict -- path/to/jitendex-yomitan.zip   # writes ios/Yomu/Resources/jmdict.sqlite
+# Place both in data/dictionaries/ (gitignored):
+#   jitendex-yomitan.zip        https://jitendex.org
+#   JPDB_v2.2_Frequency_Kana.zip https://github.com/Kuuuube/yomitan-dictionaries
+npm run build:ios-dict                         # writes ios/Yomu/Resources/jmdict.sqlite
 cd ios
 cp Secrets.xcconfig.example Secrets.xcconfig   # set YOMU_API_TOKEN to the API's APP_PASSWORD
 xcodegen generate

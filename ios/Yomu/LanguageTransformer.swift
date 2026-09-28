@@ -14,6 +14,8 @@ final class LanguageTransformer {
     struct TransformedText {
         let text: String
         let conditions: Int
+        /// How many rules were applied — Yomitan ranks shorter inflection chains first.
+        let steps: Int
     }
 
     private struct Rule {
@@ -61,7 +63,7 @@ final class LanguageTransformer {
     /// Breadth-first, exactly as upstream: each result is itself a candidate for
     /// further de-inflection, so 食べさせられたかった unwinds one step at a time.
     func transform(_ text: String) -> [TransformedText] {
-        var results = [TransformedText(text: text, conditions: 0)]
+        var results = [TransformedText(text: text, conditions: 0, steps: 0)]
         // A trace per result, so a rule cannot be applied to the same text twice.
         var traces: [[String]] = [[]]
 
@@ -86,7 +88,8 @@ final class LanguageTransformer {
                         ? ""
                         : String(current.text.dropLast(rule.inflected.count))
                     results.append(TransformedText(text: stem + rule.deinflected,
-                                                   conditions: rule.conditionsOut))
+                                                   conditions: rule.conditionsOut,
+                                                   steps: trace.count + 1))
                     traces.append(trace + [frame])
                 }
             }
